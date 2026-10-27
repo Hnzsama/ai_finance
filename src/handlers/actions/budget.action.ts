@@ -1,9 +1,33 @@
-import { getBudgetsSummary, setCategoryBudget } from "../../prisma/finance.ts";
+import { clearAllBudgets, getBudgetsSummary, setCategoryBudget } from "../../prisma/finance.ts";
+import { googleSheetsService } from "../../services/sheets.ts";
 import type { ActionContext } from "./types.ts";
 
 export async function handleSetBudget(ctx: ActionContext): Promise<void> {
   const { sock, msg, remoteJid, user, deviceInfo, switchNotice, plan } = ctx;
   try {
+    const action = plan.args.action || "SET";
+
+    if (action === "CLEAR") {
+      const res = await clearAllBudgets(user.id);
+
+      if (user.spreadsheetId) {
+        try {
+          await googleSheetsService.syncBudgetsTab(user.spreadsheetId, user.id);
+        } catch (sErr) {
+          console.error("[Google Sheets] Gagal sinkron tab budget setelah dikosongkan:", sErr);
+        }
+      }
+
+      let reply = plan.reply ? `${plan.reply}\n\n` : "";
+      reply +=
+        `🗑️ *Batas Anggaran (Budget) Telah Dikosongkan!*\n` +
+        `Total *${res.deletedCount}* target budget telah dihapus dari database dan Google Spreadsheet Anda.\n\n` +
+        `💡 _Ketik "budget makan 500rb" jika ingin mengatur batas anggaran baru._`;
+
+      await sock.sendMessage(remoteJid, { text: switchNotice + reply }, { quoted: msg });
+      return;
+    }
+
     const category = plan.args.category || "Makanan & Minuman";
     const amount = Number(plan.args.amount) || 0;
     const period = plan.args.period || "MONTHLY";
@@ -24,6 +48,14 @@ export async function handleSetBudget(ctx: ActionContext): Promise<void> {
       userId: user.id,
       jid: deviceInfo.jid,
     });
+
+    if (user.spreadsheetId) {
+      try {
+        await googleSheetsService.syncBudgetsTab(user.spreadsheetId, user.id);
+      } catch (sErr) {
+        console.error("[Google Sheets] Gagal sinkron tab budget:", sErr);
+      }
+    }
 
     let reply = plan.reply ? `${plan.reply}\n\n` : "";
     reply +=

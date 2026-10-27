@@ -1,10 +1,32 @@
-import { getDebtsSummary, payDebt, recordDebt } from "../../prisma/finance.ts";
+import { clearAllDebts, getDebtsSummary, payDebt, recordDebt } from "../../prisma/finance.ts";
+import { googleSheetsService } from "../../services/sheets.ts";
 import type { ActionContext } from "./types.ts";
 
 export async function handleManageDebt(ctx: ActionContext): Promise<void> {
   const { sock, msg, remoteJid, user, deviceInfo, switchNotice, plan } = ctx;
   try {
     const action = plan.args.action || "LIST";
+
+    if (action === "CLEAR") {
+      const res = await clearAllDebts(user.id);
+
+      if (user.spreadsheetId) {
+        try {
+          await googleSheetsService.syncDebtsTab(user.spreadsheetId, user.id);
+        } catch (sErr) {
+          console.error("[Google Sheets] Gagal sinkron tab hutang setelah dikosongkan:", sErr);
+        }
+      }
+
+      let reply = plan.reply ? `${plan.reply}\n\n` : "";
+      reply +=
+        `🗑️ *Buku Hutang & Piutang Telah Dikosongkan!*\n` +
+        `Total *${res.deletedCount}* catatan hutang/piutang telah dihapus dari database dan Google Spreadsheet Anda.\n\n` +
+        `💡 _Ketik "pinjam uang budi 50rb" jika ingin mencatat hutang/piutang baru._`;
+
+      await sock.sendMessage(remoteJid, { text: switchNotice + reply }, { quoted: msg });
+      return;
+    }
 
     if (action === "RECORD") {
       const type = (plan.args.type || "DEBT") as "DEBT" | "RECEIVABLE";
@@ -25,6 +47,14 @@ export async function handleManageDebt(ctx: ActionContext): Promise<void> {
         userId: user.id,
         jid: deviceInfo.jid,
       });
+
+      if (user.spreadsheetId) {
+        try {
+          await googleSheetsService.syncDebtsTab(user.spreadsheetId, user.id);
+        } catch (sErr) {
+          console.error("[Google Sheets] Gagal sinkron tab hutang:", sErr);
+        }
+      }
 
       const label = type === "DEBT" ? "Hutang ke" : "Piutang (Dipinjam oleh)";
       let reply = plan.reply ? `${plan.reply}\n\n` : "";

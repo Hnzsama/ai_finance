@@ -308,6 +308,23 @@ export class AiService {
           parsed.args.amount = local.data?.amount ?? parsed.args.amount;
         }
 
+        // Jika local parser mengenali aksi CLEAR spesifik modul (Aset, Hutang, Budget, Langganan), jangan biarkan AI keliru reset transaksi!
+        if (local.data?.actionPayload?.action === "CLEAR") {
+          if (local.action === "MANAGE_ASSETS") {
+            parsed.function = "manage_assets";
+            parsed.args = { action: "CLEAR" };
+          } else if (local.action === "MANAGE_DEBT") {
+            parsed.function = "manage_debt";
+            parsed.args = { action: "CLEAR" };
+          } else if (local.action === "SET_BUDGET") {
+            parsed.function = "set_budget";
+            parsed.args = { action: "CLEAR" };
+          } else if (local.action === "MANAGE_SUBSCRIPTIONS") {
+            parsed.function = "manage_subscriptions";
+            parsed.args = { action: "CLEAR" };
+          }
+        }
+
         // Jika pesan mengindikasikan gaji/gajian/bonus, pastikan dipetakan ke record_transaction INCOME
         if ((lower.includes("gaji") || lower.includes("gajian") || lower.includes("bonus")) && parsed.function === "set_wallet_balance") {
           parsed.function = "record_transaction";

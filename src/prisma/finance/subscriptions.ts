@@ -84,3 +84,13 @@ export async function getSubscriptionsSummary(userId?: string) {
     })),
   };
 }
+
+export async function clearAllSubscriptions(userId?: string): Promise<{ deletedCount: number }> {
+  await connectDatabase();
+  const sql = userId
+    ? `DELETE FROM public."Subscription" WHERE "userId" = $1`
+    : `DELETE FROM public."Subscription"`;
+  const res = await executeSql(sql, userId ? [userId] : []);
+  return { deletedCount: res.rowCount || 0 };
+}
+

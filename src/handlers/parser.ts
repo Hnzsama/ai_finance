@@ -199,8 +199,72 @@ export function parseFinancialMessage(rawText: string): ParseResult {
     };
   }
 
-  // 2. Cek intent reset data
-  if (/\b(reset|hapus semua|ulang dari awal|setting dari awal|mulai dari awal|kosongkan)\b/i.test(lower)) {
+  // 2. Cek spesifik reset per modul (Aset, Hutang, Budget, Langganan) SEBELUM reset umum transaksi!
+  if (/\b(aset|asset|harta|kekayaan)\b/i.test(lower) && /\b(hapus|kosongkan|reset|bersihkan)\b/i.test(lower)) {
+    return {
+      action: "MANAGE_ASSETS",
+      data: {
+        type: null,
+        amount: 0,
+        description: "Kosongkan semua aset",
+        category: "Aset",
+        wallet: null,
+        actionPayload: { action: "CLEAR" },
+      },
+      reply_message: "Sedang mengosongkan dan menghapus seluruh daftar aset Anda...",
+    };
+  }
+
+  if (/\b(hutang|piutang)\b/i.test(lower) && /\b(hapus|kosongkan|reset|bersihkan)\b/i.test(lower)) {
+    return {
+      action: "MANAGE_DEBT",
+      data: {
+        type: null,
+        amount: 0,
+        description: "Kosongkan semua hutang",
+        category: "Hutang",
+        wallet: null,
+        actionPayload: { action: "CLEAR" },
+      },
+      reply_message: "Sedang mengosongkan seluruh daftar hutang dan piutang Anda...",
+    };
+  }
+
+  if (/\b(budget|anggaran)\b/i.test(lower) && /\b(hapus|kosongkan|reset|bersihkan)\b/i.test(lower)) {
+    return {
+      action: "SET_BUDGET",
+      data: {
+        type: null,
+        amount: 0,
+        description: "Kosongkan semua budget",
+        category: "Budget",
+        wallet: null,
+        actionPayload: { action: "CLEAR" },
+      },
+      reply_message: "Sedang mengosongkan dan menghapus seluruh batas anggaran Anda...",
+    };
+  }
+
+  if (/\b(langganan|subscription|subs)\b/i.test(lower) && /\b(hapus|kosongkan|reset|bersihkan)\b/i.test(lower)) {
+    return {
+      action: "MANAGE_SUBSCRIPTIONS",
+      data: {
+        type: null,
+        amount: 0,
+        description: "Kosongkan semua langganan",
+        category: "Subscription",
+        wallet: null,
+        actionPayload: { action: "CLEAR" },
+      },
+      reply_message: "Sedang mengosongkan seluruh daftar langganan rutin Anda...",
+    };
+  }
+
+  // 2b. Cek intent reset data transaksi umum (Hanya jika BUKAN aset/hutang/budget/langganan)
+  if (
+    /\b(reset|hapus semua|ulang dari awal|setting dari awal|mulai dari awal|kosongkan)\b/i.test(lower) &&
+    !/\b(aset|asset|harta|hutang|piutang|budget|anggaran|langganan|subscription)\b/i.test(lower)
+  ) {
     return {
       action: "RESET_TRANSACTIONS",
       data: null,

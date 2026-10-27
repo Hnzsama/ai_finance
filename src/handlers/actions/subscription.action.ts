@@ -1,10 +1,32 @@
-import { getSubscriptionsSummary, recordSubscription } from "../../prisma/finance.ts";
+import { clearAllSubscriptions, getSubscriptionsSummary, recordSubscription } from "../../prisma/finance.ts";
+import { googleSheetsService } from "../../services/sheets.ts";
 import type { ActionContext } from "./types.ts";
 
 export async function handleManageSubscriptions(ctx: ActionContext): Promise<void> {
   const { sock, msg, remoteJid, user, deviceInfo, switchNotice, plan } = ctx;
   try {
     const action = plan.args.action || "LIST";
+
+    if (action === "CLEAR") {
+      const res = await clearAllSubscriptions(user.id);
+
+      if (user.spreadsheetId) {
+        try {
+          await googleSheetsService.syncSubscriptionsTab(user.spreadsheetId, user.id);
+        } catch (sErr) {
+          console.error("[Google Sheets] Gagal sinkron tab langganan setelah dikosongkan:", sErr);
+        }
+      }
+
+      let reply = plan.reply ? `${plan.reply}\n\n` : "";
+      reply +=
+        `🗑️ *Daftar Langganan Telah Dikosongkan!*\n` +
+        `Total *${res.deletedCount}* langganan rutin telah dihapus dari database dan Google Spreadsheet Anda.\n\n` +
+        `💡 _Ketik "langganan spotify 27k" jika ingin mendaftarkan langganan baru._`;
+
+      await sock.sendMessage(remoteJid, { text: switchNotice + reply }, { quoted: msg });
+      return;
+    }
 
     if (action === "RECORD") {
       const name = plan.args.name || "Langganan Bulanan";
@@ -26,6 +48,14 @@ export async function handleManageSubscriptions(ctx: ActionContext): Promise<voi
         userId: user.id,
         jid: deviceInfo.jid,
       });
+
+      if (user.spreadsheetId) {
+        try {
+          await googleSheetsService.syncSubscriptionsTab(user.spreadsheetId, user.id);
+        } catch (sErr) {
+          console.error("[Google Sheets] Gagal sinkron tab langganan:", sErr);
+        }
+      }
 
       let reply = plan.reply ? `${plan.reply}\n\n` : "";
       reply +=

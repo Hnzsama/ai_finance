@@ -129,3 +129,13 @@ export async function getBudgetsSummary(userId?: string) {
     items,
   };
 }
+
+export async function clearAllBudgets(userId?: string): Promise<{ deletedCount: number }> {
+  await connectDatabase();
+  const sql = userId
+    ? `DELETE FROM public."Budget" WHERE "userId" = $1`
+    : `DELETE FROM public."Budget"`;
+  const res = await executeSql(sql, userId ? [userId] : []);
+  return { deletedCount: res.rowCount || 0 };
+}
+

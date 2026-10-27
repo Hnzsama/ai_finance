@@ -66,3 +66,13 @@ export async function getAssetsSummary(userId?: string) {
     })),
   };
 }
+
+export async function clearAllAssets(userId?: string): Promise<{ deletedCount: number }> {
+  await connectDatabase();
+  const sql = userId
+    ? `DELETE FROM public."Asset" WHERE "userId" = $1`
+    : `DELETE FROM public."Asset"`;
+  const res = await executeSql(sql, userId ? [userId] : []);
+  return { deletedCount: res.rowCount || 0 };
+}
+

@@ -131,3 +131,13 @@ export async function getDebtsSummary(userId?: string) {
     receivables: formatList(receivables),
   };
 }
+
+export async function clearAllDebts(userId?: string): Promise<{ deletedCount: number }> {
+  await connectDatabase();
+  const sql = userId
+    ? `DELETE FROM public."Debt" WHERE "userId" = $1`
+    : `DELETE FROM public."Debt"`;
+  const res = await executeSql(sql, userId ? [userId] : []);
+  return { deletedCount: res.rowCount || 0 };
+}
+
