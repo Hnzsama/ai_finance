@@ -88,6 +88,14 @@ export async function handleManageDebt(ctx: ActionContext): Promise<void> {
         return;
       }
 
+      if (user.spreadsheetId) {
+        try {
+          await googleSheetsService.syncDebtsTab(user.spreadsheetId, user.id);
+        } catch (sErr) {
+          console.error("[Google Sheets] Gagal sinkron tab hutang setelah bayar:", sErr);
+        }
+      }
+
       let reply = plan.reply ? `${plan.reply}\n\n` : "";
       reply +=
         `✅ *Pembayaran Berhasil Dicatat!*\n` +

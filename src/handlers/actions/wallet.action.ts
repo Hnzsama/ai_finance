@@ -4,6 +4,7 @@ import {
   transferBalance,
   type WalletSummaryItem,
 } from "../../prisma/finance.ts";
+import { googleSheetsService } from "../../services/sheets.ts";
 import type { ActionContext } from "./types.ts";
 
 export async function handleListWallets(ctx: ActionContext): Promise<void> {
@@ -48,6 +49,13 @@ export async function handleSetWalletBalance(ctx: ActionContext): Promise<void> 
     const amount = Number(plan.args.amount) || 0;
 
     const res = await setWalletInitialBalance(walletName, amount, user.id, deviceInfo.jid);
+
+    if (user.spreadsheetId) {
+      googleSheetsService
+        .syncAllUserTransactions(user.id, user.spreadsheetId)
+        .catch((sErr) => console.error("[Google Sheets] Gagal sync setelah atur saldo:", sErr));
+    }
+
     let reply = plan.reply ? `${plan.reply}\n\n` : "";
     const isNegative = amount < 0;
     const badge = isNegative ? " (Saldo Minus Driver)" : "";
@@ -85,6 +93,12 @@ export async function handleTransferBalance(ctx: ActionContext): Promise<void> {
       userId: user.id,
       jid: deviceInfo.jid,
     });
+
+    if (user.spreadsheetId) {
+      googleSheetsService
+        .syncAllUserTransactions(user.id, user.spreadsheetId)
+        .catch((sErr) => console.error("[Google Sheets] Gagal sync setelah transfer:", sErr));
+    }
 
     let reply = plan.reply ? `${plan.reply}\n\n` : "";
     if (isCod) {
