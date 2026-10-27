@@ -1,5 +1,6 @@
 import { Boom } from "@hapi/boom";
 import makeWASocket, {
+  Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
@@ -10,9 +11,21 @@ import qrcode from "qrcode-terminal";
 import { CONFIG } from "../config.js";
 import { handleIncomingMessage } from "../handlers/message.js";
 
+/**
+ * Format nomor HP agar sesuai standar E.164 tanpa tanda + (contoh: 6281234567890)
+ */
+function formatPhoneNumber(phone: string): string {
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.startsWith("0")) {
+    cleaned = "62" + cleaned.slice(1);
+  }
+  return cleaned;
+}
+
 export class WhatsAppService {
   private socket: WASocket | null = null;
   private isReconnecting = false;
+  private pairingTimeout: NodeJS.Timeout | null = null;
 
   public async start(): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(CONFIG.authFolder);
@@ -25,11 +38,48 @@ export class WhatsAppService {
       auth: state,
       // Matikan logger internal Baileys agar terminal tetap bersih
       logger: pino({ level: CONFIG.logLevel }),
-      printQRInTerminal: false, // Ditangani sendiri secara rapi via qrcode-terminal
-      browser: ["Smart Finance", "Chrome", "1.0.0"],
+      printQRInTerminal: false, // Ditangani sendiri secara rapi via qrcode-terminal atau pairing code
+      browser: Browsers.ubuntu("Chrome"),
     });
 
     this.registerEvents(saveCreds);
+
+    // Hubungkan via Pairing Code jika env nomor HP tidak kosong dan belum terdaftar
+    const rawPhoneNumber = CONFIG.phoneNumber;
+    if (rawPhoneNumber && !state.creds.registered) {
+      this.requestPairingCode(rawPhoneNumber);
+    }
+  }
+
+  private requestPairingCode(phone: string): void {
+    if (this.pairingTimeout) {
+      clearTimeout(this.pairingTimeout);
+    }
+
+    const cleanPhone = formatPhoneNumber(phone);
+    if (!cleanPhone) {
+      console.warn("⚠️ [WhatsApp] Nomor telepon pairing code tidak valid.");
+      return;
+    }
+
+    console.log(`⏳ [WhatsApp] Menyiapkan kode pairing untuk nomor: ${cleanPhone}...`);
+
+    this.pairingTimeout = setTimeout(async () => {
+      try {
+        if (!this.socket || this.socket.authState.creds.registered) return;
+
+        const code = await this.socket.requestPairingCode(cleanPhone);
+        const formattedCode = code?.match(/.{1,4}/g)?.join("-") || code;
+
+        console.log("\n================ [ PAIRING CODE ] ================");
+        console.log(`📱 Nomor WhatsApp : ${cleanPhone}`);
+        console.log(`🔑 Kode Pairing   : ${formattedCode}`);
+        console.log("👉 Masukkan kode ini di WhatsApp Anda:");
+        console.log("   Pengaturan > Perangkat Tertaut > Tautkan Perangkat > Tautkan dengan nomor telepon saja.\n");
+      } catch (err) {
+        console.error("❌ [WhatsApp] Gagal mendapatkan kode pairing:", err);
+      }
+    }, 3000);
   }
 
   private registerEvents(saveCreds: () => Promise<void>): void {
@@ -42,7 +92,8 @@ export class WhatsAppService {
     this.socket.ev.on("connection.update", (update) => {
       const { connection, lastDisconnect, qr } = update;
 
-      if (qr) {
+      // Hanya tampilkan QR code jika tidak menggunakan pairing code
+      if (qr && !CONFIG.phoneNumber) {
         console.clear();
         console.log("\n================ [ SCAN QR CODE ] ================");
         qrcode.generate(qr, { small: true });
@@ -50,8 +101,16 @@ export class WhatsAppService {
       }
 
       if (connection === "close") {
+        if (this.pairingTimeout) {
+          clearTimeout(this.pairingTimeout);
+          this.pairingTimeout = null;
+        }
         this.handleDisconnection(lastDisconnect?.error);
       } else if (connection === "open") {
+        if (this.pairingTimeout) {
+          clearTimeout(this.pairingTimeout);
+          this.pairingTimeout = null;
+        }
         console.log("✅ WhatsApp bot berhasil terhubung dan siap digunakan!");
       }
     });
