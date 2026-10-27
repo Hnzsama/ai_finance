@@ -295,20 +295,20 @@ export async function seedLuqmanUser(): Promise<string> {
     );
   }
 
-  // 3. UserSetting
+  // 3. UserSetting (Default persona & user phone)
   const settingCheck = await executeSql(
-    `SELECT id FROM public."UserSetting" WHERE "userId" = $1 LIMIT 1`,
+    `SELECT id FROM public."UserSetting" WHERE "userId" = $1 AND "key" = 'persona' LIMIT 1`,
     [userId]
   );
   if (!settingCheck.rows || settingCheck.rows.length === 0) {
     await executeSql(
-      `INSERT INTO public."UserSetting" ("id", "userId", "userPhone", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      `INSERT INTO public."UserSetting" ("id", "userId", "userPhone", "key", "value", "updatedAt")
+       VALUES ($1, $2, $3, 'persona', 'SERIUS', CURRENT_TIMESTAMP)`,
       [crypto.randomUUID(), userId, LUQMAN_USER.phone]
     );
   } else {
     await executeSql(
-      `UPDATE public."UserSetting" SET "userPhone" = $1, "updatedAt" = CURRENT_TIMESTAMP WHERE "userId" = $2`,
+      `UPDATE public."UserSetting" SET "userPhone" = $1, "value" = 'SERIUS', "updatedAt" = CURRENT_TIMESTAMP WHERE "userId" = $2 AND "key" = 'persona'`,
       [LUQMAN_USER.phone, userId]
     );
   }
