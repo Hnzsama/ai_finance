@@ -111,12 +111,20 @@ export async function handleDeleteLastTransaction(ctx: ActionContext): Promise<v
       return;
     }
 
+    if (user.spreadsheetId) {
+      try {
+        await googleSheetsService.syncAllUserTransactions(user.id, user.spreadsheetId);
+      } catch (sErr) {
+        console.error("[Google Sheets] Gagal sinkronisasi setelah hapus transaksi:", sErr);
+      }
+    }
+
     let reply = plan.reply ? `${plan.reply}\n\n` : "";
     reply +=
       `🗑️ *Transaksi Terakhir Dibatalkan/Dihapus!*\n` +
       `Keterangan: *${deleted.description}*\n` +
       `Nominal: *${formatIDR(BigInt(deleted.amount))}*\n` +
-      `Data saldo dompet telah disesuaikan kembali.`;
+      `Data saldo dompet dan Google Sheets telah disesuaikan kembali.`;
 
     await sock.sendMessage(remoteJid, { text: switchNotice + reply }, { quoted: msg });
   } catch (err) {
@@ -204,9 +212,19 @@ export async function handleResetTransactions(ctx: ActionContext): Promise<void>
   const { sock, msg, remoteJid, user, switchNotice, plan } = ctx;
   try {
     await resetAllTransactions(user.id);
+
+    if (user.spreadsheetId) {
+      try {
+        await googleSheetsService.syncAllUserTransactions(user.id, user.spreadsheetId);
+      } catch (sErr) {
+        console.error("[Google Sheets] Gagal sinkronisasi setelah reset transaksi:", sErr);
+      }
+    }
+
     let reply = plan.reply ? `${plan.reply}\n\n` : "";
     reply +=
-      `🔄 *Status Data:* Riwayat transaksi Anda telah dikosongkan (Saldo semua dompet kembali ke Rp 0).\n\n` +
+      `🔄 *Status Data:* Riwayat transaksi Anda telah dikosongkan (Saldo semua dompet kembali ke Rp 0).\n` +
+      `📊 Seluruh data transaksi di Google Spreadsheet telah dibersihkan.\n\n` +
       `💡 _Contoh atur saldo awal: "saldo awal bca 5jt" atau "cash ada 250rb"_`;
 
     await sock.sendMessage(remoteJid, { text: switchNotice + reply }, { quoted: msg });

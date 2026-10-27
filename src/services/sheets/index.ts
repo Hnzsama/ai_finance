@@ -271,10 +271,6 @@ export class GoogleSheetsService {
       );
 
       const rows = res.rows || [];
-      if (rows.length === 0) {
-        await this.ensureYearTab(spreadsheetId, currentYear);
-        return { syncedCount: 0 };
-      }
 
       // Kelompokkan transaksi berdasarkan tahun
       const byYear = new Map<number, any[]>();
@@ -285,42 +281,24 @@ export class GoogleSheetsService {
         byYear.get(y)!.push(row);
       }
 
+      // Pastikan tahun berjalan terdaftar agar ter-clear jika kosong
+      const allYearsToProcess = new Set<number>([currentYear, ...byYear.keys()]);
+
+      // Cari semua tab Data_{year} yang ada di spreadsheet untuk dibersihkan jika tidak ada datanya lagi
+      const rawSheets = meta.data.sheets?.filter((s) => s.properties?.title?.startsWith("Data_")) || [];
+      for (const s of rawSheets) {
+        const title = s.properties?.title;
+        if (title) {
+          const m = title.match(/^Data_(\d{4})$/);
+          if (m) allYearsToProcess.add(parseInt(m[1], 10));
+        }
+      }
+
       let totalSynced = 0;
-      for (const [year, txList] of byYear.entries()) {
+      for (const year of allYearsToProcess) {
         const tabName = await this.ensureYearTab(spreadsheetId, year);
         const rawTabName = `Data_${year}`;
-
-        const dataRows = txList.map((t, idx) => {
-          const date = new Date(t.createdAt);
-          const formattedDate = date.toLocaleString("id-ID", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          });
-          const monthLabel = this.getMonthLabel(date);
-          const dev = t.deviceType === "DESKTOP" ? "Laptop 💻 (@lid)" : "HP 📱 (@s.whatsapp.net)";
-          const y = date.getFullYear();
-          const m = String(date.getMonth() + 1).padStart(2, "0");
-          const d = String(date.getDate()).padStart(2, "0");
-          const isoDate = `${y}-${m}-${d}`;
-
-          return [
-            idx + 1,
-            formattedDate,
-            monthLabel,
-            t.type,
-            t.category_name || "Lainnya",
-            t.wallet_name || "Cash",
-            t.description,
-            Number(t.amount),
-            dev,
-            t.jid || "-",
-            isoDate,
-          ];
-        });
+        const txList = byYear.get(year) || [];
 
         // Bersihkan dulu area transaksi mentah lama di Data_{year} (kolom A - K)
         try {
@@ -330,18 +308,54 @@ export class GoogleSheetsService {
           });
         } catch {}
 
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `'${rawTabName}'!A2:K${1 + dataRows.length}`,
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: dataRows },
-        });
+        if (txList.length > 0) {
+          const dataRows = txList.map((t, idx) => {
+            const date = new Date(t.createdAt);
+            const formattedDate = date.toLocaleString("id-ID", {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
+            const monthLabel = this.getMonthLabel(date);
+            const dev = t.deviceType === "DESKTOP" ? "Laptop 💻 (@lid)" : "HP 📱 (@s.whatsapp.net)";
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, "0");
+            const d = String(date.getDate()).padStart(2, "0");
+            const isoDate = `${y}-${m}-${d}`;
 
-        // Pastikan formula filter dinamis di tab tahun berjalan tetap ada
+            return [
+              idx + 1,
+              formattedDate,
+              monthLabel,
+              t.type,
+              t.category_name || "Lainnya",
+              t.wallet_name || "Cash",
+              t.description,
+              Number(t.amount),
+              dev,
+              t.jid || "-",
+              isoDate,
+            ];
+          });
+
+          await sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `'${rawTabName}'!A2:K${1 + dataRows.length}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: dataRows },
+          });
+
+          totalSynced += dataRows.length;
+        }
+
+        // Pastikan formula filter dinamis di tab tahun berjalan tetap ada dan bersih
         await applyDashboardLayout(spreadsheetId, tabName, undefined, String(year), locale);
-
-        totalSynced += dataRows.length;
       }
+
+      return { syncedCount: totalSynced };
 
       // Update flag isSyncedToSheet di DB
       await executeSql(
