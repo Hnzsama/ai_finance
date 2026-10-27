@@ -17,8 +17,10 @@ yarn-error.log*
 
 # WhatsApp sessions & credentials (SANGAT PENTING)
 auth_info_baileys/
+auth_info_baileys*
 session/
 *.session
+*.zip
 
 # Alchemy & Prisma Composer local state
 /.alchemy

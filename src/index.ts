@@ -1,15 +1,10 @@
 import "./env.js";
 import { WhatsAppService } from "./services/whatsapp.js";
-import { createDashboardServer } from "./server/dashboard.ts";
 
 const bootstrap = async (): Promise<void> => {
   console.log("🚀 Memulai Smart Finance Services...");
 
-  // 1. Jalankan Interactive Web Dashboard Server (Visual KPI cards, Charts, Tabs & Filter Table)
-  const dashboardPort = Number(process.env.PORT) || 3000;
-  createDashboardServer(dashboardPort);
-
-  // 2. Jalankan WhatsApp Bot Service
+  // Jalankan WhatsApp Bot Service
   const waService = new WhatsAppService();
 
   // Tangani sinyal shutdown terminal (Ctrl+C)
