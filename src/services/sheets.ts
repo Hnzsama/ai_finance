@@ -106,7 +106,7 @@ export class GoogleSheetsService {
                   title: rawTabName,
                   gridProperties: {
                     rowCount: 1000,
-                    columnCount: 10,
+                    columnCount: 11,
                   },
                 },
               },
@@ -115,13 +115,13 @@ export class GoogleSheetsService {
         },
       });
 
-      // Tulis header master tabel mentah
+      // Tulis header master tabel mentah (termasuk kolom K untuk TANGGAL_ISO)
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${rawTabName}'!A1:J1`,
+        range: `'${rawTabName}'!A1:K1`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
-          values: [["NO", "TANGGAL & WAKTU", "BULAN", "TIPE", "KATEGORI", "DOMPET", "KETERANGAN", "NOMINAL (RP)", "PERANGKAT", "WHATSAPP SENDER"]],
+          values: [["NO", "TANGGAL & WAKTU", "BULAN", "TIPE", "KATEGORI", "DOMPET", "KETERANGAN", "NOMINAL (RP)", "PERANGKAT", "WHATSAPP SENDER", "TANGGAL_ISO"]],
         },
       });
     }
@@ -205,6 +205,10 @@ export class GoogleSheetsService {
     const isSemicolonLocale = !locale || locale.startsWith("id") || !locale.startsWith("en");
     const s = isSemicolonLocale ? ";" : ",";
 
+    // Helper kondisi filter tanggal fleksibel:
+    // Mendukung: Hari Ini, Minggu Ini, Bulan Ini, Pilih Rentang Tanggal (C5 & E5), Semua Waktu, atau nama bulan spesifik (Januari - Desember)
+    const dateCond = `(IF($C$4="Hari Ini"${s} (${rawTabName}!$K$2:$K = TODAY())${s} IF($C$4="Minggu Ini"${s} ((${rawTabName}!$K$2:$K >= (TODAY() - WEEKDAY(TODAY()${s} 2) + 1)) * (${rawTabName}!$K$2:$K <= TODAY()))${s} IF($C$4="Bulan Ini"${s} ((${rawTabName}!$K$2:$K >= DATE(YEAR(TODAY())${s} MONTH(TODAY())${s} 1)) * (${rawTabName}!$K$2:$K <= EOMONTH(TODAY()${s} 0)))${s} IF($C$4="Pilih Rentang Tanggal"${s} ((${rawTabName}!$K$2:$K >= IF($C$5=""${s} DATE(2000${s} 1${s} 1)${s} $C$5)) * (${rawTabName}!$K$2:$K <= IF($E$5=""${s} DATE(2099${s} 12${s} 31)${s} $E$5)))${s} IF($C$4="Semua Waktu"${s} 1${s} IF($C$4="Semua Bulan"${s} 1${s} (${rawTabName}!$C$2:$C = $C$4)))))))`;
+
     // 1. Data Nilai Sel (Row 1 - 15)
     const headerValues = [
       // Row 1: Title
@@ -213,11 +217,11 @@ export class GoogleSheetsService {
       ["", "Buku Kas Digital Pribadi • Sinkronisasi Otomatis WhatsApp Multi-Perangkat (HP & Laptop)", "", "", "", "", "", "", "", ""],
       // Row 3: Blank
       ["", "", "", "", "", "", "", "", "", ""],
-      // Row 4: Controls (Bulan di C4, Kategori di E4, Dompet di G4, Search di I4)
+      // Row 4: Controls Utama (Periode di C4, Kategori di E4, Dompet di G4, Search di I4)
       [
         "",
-        "Filter Bulan:",
-        "Semua Bulan",
+        "Filter Periode:",
+        "Semua Waktu",
         "Filter Kategori:",
         "Semua Kategori",
         "Filter Dompet:",
@@ -226,8 +230,19 @@ export class GoogleSheetsService {
         "",
         `Tahun: ${yearStr}`,
       ],
-      // Row 5: Hint pencarian & status
-      ["", "", "", "", "", "", "", "", "(Ketik untuk filter live)", ""],
+      // Row 5: Controls Rentang Tanggal Khusus (Dari C5, Sampai E5, Status G5, Hint I5)
+      [
+        "",
+        "📅 Dari Tgl:",
+        `=DATE(YEAR(TODAY())${s} MONTH(TODAY())${s} 1)`,
+        "📅 Sampai Tgl:",
+        `=TODAY()`,
+        "Status Periode:",
+        `=IF($C$4="Pilih Rentang Tanggal"${s} "Rentang: " & TEXT($C$5${s} "dd/mm/yyyy") & " s/d " & TEXT($E$5${s} "dd/mm/yyyy")${s} IF($C$4="Hari Ini"${s} "Hari Ini (" & TEXT(TODAY()${s} "dd/mm/yyyy") & ")"${s} IF($C$4="Minggu Ini"${s} "Minggu Ini (Senin - Hari Ini)"${s} IF($C$4="Bulan Ini"${s} "Bulan Ini (" & TEXT(TODAY()${s} "MMMM") & ")"${s} "Periode: " & $C$4))))`,
+        "Hint:",
+        "(Ketik kata kunci untuk filter live)",
+        "",
+      ],
       // Row 6: KPI Card Titles
       [
         "",
@@ -241,16 +256,16 @@ export class GoogleSheetsService {
         "",
         "",
       ],
-      // Row 7: KPI Card Formulas (Merujuk langsung ke master data mentah Data_{year})
+      // Row 7: KPI Card Formulas (Dinamis merespons Periode, Tanggal, Kategori, & Dompet)
       [
         "",
         "=D7-F7",
         "",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$D$2:$D${s} "INCOME"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$E$2:$E${s} IF($E$4="Semua Kategori"${s} "<>"${s} $E$4)${s} ${rawTabName}!$F$2:$F${s} IF($G$4="Semua Dompet"${s} "<>"${s} $G$4))`,
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$D$2:$D="INCOME") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
         "",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$E$2:$E${s} IF($E$4="Semua Kategori"${s} "<>"${s} $E$4)${s} ${rawTabName}!$F$2:$F${s} IF($G$4="Semua Dompet"${s} "<>"${s} $G$4))`,
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
         "",
-        `=COUNTIFS(${rawTabName}!$D$2:$D${s} "<>"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$E$2:$E${s} IF($E$4="Semua Kategori"${s} "<>"${s} $E$4)${s} ${rawTabName}!$F$2:$F${s} IF($G$4="Semua Dompet"${s} "<>"${s} $G$4))`,
+        `=COUNT(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
         "",
         "",
       ],
@@ -286,10 +301,10 @@ export class GoogleSheetsService {
       [
         "",
         "Makanan & Minuman",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$E$2:$E${s} B11${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$F$2:$F${s} IF($G$4="Semua Dompet"${s} "<>"${s} $G$4))`,
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$E$2:$E=B11) * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
         "",
         "Cash",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$F$2:$F${s} "Cash"${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$E$2:$E${s} IF($E$4="Semua Kategori"${s} "<>"${s} $E$4))`,
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$F$2:$F="Cash") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)))${s} 0))`,
         "",
         "",
         "",
@@ -298,11 +313,11 @@ export class GoogleSheetsService {
       // Row 12: Breakdown 2
       [
         "",
-        "Transportasi & Bensin",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$E$2:$E${s} B12${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$F$2:$F${s} IF($G$4="Semua Dompet"${s} "<>"${s} $G$4))`,
+        "Operasional ShopeeFood & Bensin",
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$E$2:$E=B12) * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
         "",
-        "BCA",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$F$2:$F${s} "BCA"${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$E$2:$E${s} IF($E$4="Semua Kategori"${s} "<>"${s} $E$4))`,
+        "ShopeePay",
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$F$2:$F="ShopeePay") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)))${s} 0))`,
         "",
         "",
         "",
@@ -311,11 +326,11 @@ export class GoogleSheetsService {
       // Row 13: Breakdown 3
       [
         "",
-        "Rokok & Tembakau",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$E$2:$E${s} B13${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$F$2:$F${s} IF($G$4="Semua Dompet"${s} "<>"${s} $G$4))`,
+        "Kosan & Tagihan Listrik",
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$E$2:$E=B13) * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
         "",
-        "Mandiri",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$F$2:$F${s} "Mandiri"${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$E$2:$E${s} IF($E$4="Semua Kategori"${s} "<>"${s} $E$4))`,
+        "GoPay",
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$F$2:$F="GoPay") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)))${s} 0))`,
         "",
         "",
         "",
@@ -324,11 +339,11 @@ export class GoogleSheetsService {
       // Row 14: Breakdown 4
       [
         "",
-        "Tagihan & Utilitas",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$E$2:$E${s} B14${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$F$2:$F${s} IF($G$4="Semua Dompet"${s} "<>"${s} $G$4))`,
+        "Belanja Pribadi & Harian",
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$E$2:$E=B14) * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
         "",
-        "GoPay",
-        `=SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$F$2:$F${s} "GoPay"${s} ${rawTabName}!$D$2:$D${s} "EXPENSE"${s} ${rawTabName}!$C$2:$C${s} IF($C$4="Semua Bulan"${s} "<>"${s} $C$4)${s} ${rawTabName}!$E$2:$E${s} IF($E$4="Semua Kategori"${s} "<>"${s} $E$4))`,
+        "SeaBank",
+        `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$F$2:$F="SeaBank") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)))${s} 0))`,
         "",
         "",
         "",
@@ -365,9 +380,10 @@ export class GoogleSheetsService {
     });
 
     // 2. Pasang Formula Filter Dinamis di Baris 16 Tab Dashboard
-    // Formula ini yang membuat seluruh baris tabel transaksi di bawahnya otomatis merespon dropdown C4, E4, G4, dan Input Pencarian I4!
+    // Formula ini yang membuat seluruh baris tabel transaksi di bawahnya otomatis merespon:
+    // Dropdown Periode (C4), Rentang Tanggal (C5 & E5), Kategori (E4), Dompet (G4), dan Input Pencarian (I4)!
     // Dilengkapi SORT descending (1; FALSE) agar transaksi terbaru selalu berada di paling atas!
-    const filterFormula = `=IFERROR(SORT(FILTER(${rawTabName}!A2:J${s} (${rawTabName}!A2:A<>"") * (IF($C$4="Semua Bulan"${s} 1${s} ${rawTabName}!C2:C=$C$4)) * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!E2:E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!F2:F=$G$4)) * (IF($I$4=""${s} 1${s} (ISNUMBER(SEARCH($I$4${s} ${rawTabName}!G2:G)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!E2:E)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!F2:F)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!B2:B))))))${s} 1${s} FALSE)${s} {"-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "Tidak ada data transaksi yang cocok dengan filter / kata kunci"${s} 0${s} "-"${s} "-"})`;
+    const filterFormula = `=IFERROR(SORT(FILTER(${rawTabName}!A2:J${s} (${rawTabName}!A2:A<>"") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!E2:E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!F2:F=$G$4)) * (IF($I$4=""${s} 1${s} (ISNUMBER(SEARCH($I$4${s} ${rawTabName}!G2:G)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!E2:E)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!F2:F)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!B2:B))))))${s} 1${s} FALSE)${s} {"-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "Tidak ada data transaksi yang cocok dengan filter / kata kunci"${s} 0${s} "-"${s} "-"})`;
 
     await sheets.spreadsheets.values.clear({
       spreadsheetId,
@@ -386,7 +402,14 @@ export class GoogleSheetsService {
     // Formatting & Data Validation jika sheetId tersedia
     if (sheetId !== undefined) {
       try {
-        const monthDropdown = ["Semua Bulan", ...MONTH_NAMES];
+        const periodDropdown = [
+          "Semua Waktu",
+          "Hari Ini",
+          "Minggu Ini",
+          "Bulan Ini",
+          "Pilih Rentang Tanggal",
+          ...MONTH_NAMES,
+        ];
         const categoryDropdown = [
           "Semua Kategori",
           "Pendapatan Driver ShopeeFood",
@@ -418,13 +441,13 @@ export class GoogleSheetsService {
         // Lebar kolom ideal agar teks dan dropdown arrow tidak pernah terpotong
         const colWidths = [
           { index: 0, width: 60 },  // A: NO
-          { index: 1, width: 175 }, // B: TANGGAL & WAKTU / Category Label
-          { index: 2, width: 145 }, // C: BULAN / Month Dropdown / Category Amount
-          { index: 3, width: 115 }, // D: TIPE / Category Label
-          { index: 4, width: 220 }, // E: KATEGORI / Category Dropdown / Wallet Label
-          { index: 5, width: 130 }, // F: DOMPET / Wallet Label / Wallet Amount
-          { index: 6, width: 260 }, // G: KETERANGAN / Wallet Dropdown
-          { index: 7, width: 130 }, // H: NOMINAL (RP) / Cari Label
+          { index: 1, width: 175 }, // B: TANGGAL & WAKTU / Dari Tgl Label
+          { index: 2, width: 145 }, // C: BULAN / Periode Dropdown / Dari Tgl Input
+          { index: 3, width: 125 }, // D: TIPE / Sampai Tgl Label
+          { index: 4, width: 220 }, // E: KATEGORI / Category Dropdown / Sampai Tgl Input
+          { index: 5, width: 130 }, // F: DOMPET / Status Label
+          { index: 6, width: 260 }, // G: KETERANGAN / Status Dinamis
+          { index: 7, width: 130 }, // H: NOMINAL (RP) / Cari Label / Hint Label
           { index: 8, width: 210 }, // I: PERANGKAT / Search Input Box!
           { index: 9, width: 220 }, // J: WHATSAPP SENDER / Info
         ];
@@ -449,7 +472,7 @@ export class GoogleSheetsService {
                 },
               })),
 
-              // 2. Data Validation Dropdown pada Sel C4 (Filter Bulan)
+              // 2. Data Validation Dropdown pada Sel C4 (Filter Periode)
               {
                 setDataValidation: {
                   range: {
@@ -462,11 +485,53 @@ export class GoogleSheetsService {
                   rule: {
                     condition: {
                       type: "ONE_OF_LIST",
-                      values: monthDropdown.map((v) => ({ userEnteredValue: v })),
+                      values: periodDropdown.map((v) => ({ userEnteredValue: v })),
                     },
-                    inputMessage: "Pilih bulan untuk memfilter rekapitulasi data keuangan.",
+                    inputMessage: "Pilih periode waktu (Hari Ini, Minggu Ini, Bulan Ini, Rentang Tanggal, atau Nama Bulan).",
                     showCustomUi: true,
                     strict: true,
+                  },
+                },
+              },
+
+              // 2b. Data Validation Tanggal pada Sel C5 (Dari Tanggal) - Dukung Kalender Interaktif
+              {
+                setDataValidation: {
+                  range: {
+                    sheetId,
+                    startRowIndex: 4,
+                    endRowIndex: 5,
+                    startColumnIndex: 2,
+                    endColumnIndex: 3,
+                  },
+                  rule: {
+                    condition: {
+                      type: "DATE_IS_VALID",
+                    },
+                    inputMessage: "Klik 2x untuk kalender interaktif atau ketik tanggal awal (YYYY-MM-DD).",
+                    showCustomUi: true,
+                    strict: false,
+                  },
+                },
+              },
+
+              // 2c. Data Validation Tanggal pada Sel E5 (Sampai Tanggal) - Dukung Kalender Interaktif
+              {
+                setDataValidation: {
+                  range: {
+                    sheetId,
+                    startRowIndex: 4,
+                    endRowIndex: 5,
+                    startColumnIndex: 4,
+                    endColumnIndex: 5,
+                  },
+                  rule: {
+                    condition: {
+                      type: "DATE_IS_VALID",
+                    },
+                    inputMessage: "Klik 2x untuk kalender interaktif atau ketik tanggal akhir (YYYY-MM-DD).",
+                    showCustomUi: true,
+                    strict: false,
                   },
                 },
               },
@@ -541,7 +606,7 @@ export class GoogleSheetsService {
                 },
               },
 
-              // 6. Styling Control Bar (Row 4)
+              // 6a. Styling Control Bar Utama (Row 4)
               {
                 repeatCell: {
                   range: { sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 0, endColumnIndex: 10 },
@@ -583,6 +648,49 @@ export class GoogleSheetsService {
                 },
               },
 
+              // 6b. Styling Control Bar Rentang Tanggal (Row 5)
+              {
+                repeatCell: {
+                  range: { sheetId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 0, endColumnIndex: 10 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 0.96, green: 0.97, blue: 0.99 },
+                      textFormat: { bold: true, fontSize: 9, foregroundColor: { red: 0.25, green: 0.3, blue: 0.4 } },
+                    },
+                  },
+                  fields: "userEnteredFormat(backgroundColor,textFormat)",
+                },
+              },
+              // Input cells tanggal C5 & E5
+              ...[2, 4].map((colIdx) => ({
+                repeatCell: {
+                  range: { sheetId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: colIdx, endColumnIndex: colIdx + 1 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 1, green: 1, blue: 1 },
+                      textFormat: { bold: true, fontSize: 10, foregroundColor: { red: 0.08, green: 0.12, blue: 0.22 } },
+                      horizontalAlignment: "CENTER",
+                      numberFormat: { type: "DATE", pattern: "yyyy-mm-dd" },
+                    },
+                    note: "Klik 2x untuk memilih tanggal dari kalender interaktif.",
+                  },
+                  fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,numberFormat),note",
+                },
+              })),
+              // Status Periode Dinamis di G5 (colIdx 6)
+              {
+                repeatCell: {
+                  range: { sheetId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 6, endColumnIndex: 7 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 0.92, green: 0.96, blue: 1.0 },
+                      textFormat: { bold: true, fontSize: 9, foregroundColor: { red: 0.1, green: 0.35, blue: 0.65 } },
+                      horizontalAlignment: "CENTER",
+                    },
+                  },
+                  fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+                },
+              },
               // Hint pencarian (Cell I5: row index 4, col index 8)
               {
                 repeatCell: {
@@ -823,6 +931,11 @@ export class GoogleSheetsService {
     const amountVal = typeof tx.amount === "bigint" ? Number(tx.amount) : tx.amount;
     const deviceIcon = tx.deviceType === "DESKTOP" ? "Laptop 💻 (@lid)" : "HP 📱 (@s.whatsapp.net)";
 
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const isoDate = `${y}-${m}-${d}`;
+
     const row = [
       nextIndex,
       formattedDate,
@@ -834,13 +947,14 @@ export class GoogleSheetsService {
       amountVal,
       deviceIcon,
       tx.jid || "-",
+      isoDate,
     ];
 
-    // Simpan ke tab master transaksi mentah Data_{year}
+    // Simpan ke tab master transaksi mentah Data_{year} (kolom A sampai K)
     // Tab Dashboard {year} otomatis merefleksikan perubahan secara dinamis via formula FILTER
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: `'${rawTabName}'!A2:J`,
+      range: `'${rawTabName}'!A2:K`,
       valueInputOption: "USER_ENTERED",
       insertDataOption: "INSERT_ROWS",
       requestBody: {
@@ -1496,7 +1610,10 @@ export class GoogleSheetsService {
             second: "2-digit",
           });
           const monthLabel = this.getMonthLabel(date);
-          const dev = t.deviceType === "DESKTOP" ? "Laptop 💻 (@lid)" : "HP 📱 (@s.whatsapp.net)";
+          const y = date.getFullYear();
+          const m = String(date.getMonth() + 1).padStart(2, "0");
+          const d = String(date.getDate()).padStart(2, "0");
+          const isoDate = `${y}-${m}-${d}`;
 
           return [
             idx + 1,
@@ -1509,20 +1626,21 @@ export class GoogleSheetsService {
             Number(t.amount),
             dev,
             t.jid || "-",
+            isoDate,
           ];
         });
 
-        // Bersihkan dulu area transaksi mentah lama di Data_{year}
+        // Bersihkan dulu area transaksi mentah lama di Data_{year} (kolom A - K)
         try {
           await sheets.spreadsheets.values.clear({
             spreadsheetId,
-            range: `'${rawTabName}'!A2:J1000`,
+            range: `'${rawTabName}'!A2:K1000`,
           });
         } catch {}
 
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: `'${rawTabName}'!A2:J${1 + dataRows.length}`,
+          range: `'${rawTabName}'!A2:K${1 + dataRows.length}`,
           valueInputOption: "USER_ENTERED",
           requestBody: { values: dataRows },
         });
