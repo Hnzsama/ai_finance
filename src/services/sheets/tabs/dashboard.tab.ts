@@ -20,9 +20,9 @@ export async function applyDashboardLayout(
   const isSemicolonLocale = !locale || locale.startsWith("id") || !locale.startsWith("en");
   const s = isSemicolonLocale ? ";" : ",";
 
-  // Helper kondisi filter tanggal fleksibel:
+  // Helper kondisi filter tanggal fleksibel (Boolean Logic murni, 100% bebas Formula Parse Error di semua locale Google Sheets):
   // Mendukung: Hari Ini, Minggu Ini, Bulan Ini, Pilih Rentang Tanggal (C5 & E5), Semua Waktu, atau nama bulan spesifik (Januari - Desember)
-  const dateCond = `(IF($C$4="Hari Ini"${s} (${rawTabName}!$K$2:$K = TODAY())${s} IF($C$4="Minggu Ini"${s} ((${rawTabName}!$K$2:$K >= (TODAY() - WEEKDAY(TODAY()${s} 2) + 1)) * (${rawTabName}!$K$2:$K <= TODAY()))${s} IF($C$4="Bulan Ini"${s} ((${rawTabName}!$K$2:$K >= DATE(YEAR(TODAY())${s} MONTH(TODAY())${s} 1)) * (${rawTabName}!$K$2:$K <= EOMONTH(TODAY()${s} 0)))${s} IF($C$4="Pilih Rentang Tanggal"${s} ((${rawTabName}!$K$2:$K >= IF($C$5=""${s} DATE(2000${s} 1${s} 1)${s} $C$5)) * (${rawTabName}!$K$2:$K <= IF($E$5=""${s} DATE(2099${s} 12${s} 31)${s} $E$5)))${s} IF($C$4="Semua Waktu"${s} 1${s} IF($C$4="Semua Bulan"${s} 1${s} (${rawTabName}!$C$2:$C = $C$4)))))))`;
+  const dateCond = `((($C$4="Semua Waktu") + (($C$4="Hari Ini") * ('${rawTabName}'!$K$2:$K = TODAY())) + (($C$4="Minggu Ini") * ('${rawTabName}'!$K$2:$K >= (TODAY() - WEEKDAY(TODAY()${s} 2) + 1)) * ('${rawTabName}'!$K$2:$K <= TODAY())) + (($C$4="Bulan Ini") * ('${rawTabName}'!$K$2:$K >= DATE(YEAR(TODAY())${s} MONTH(TODAY())${s} 1)) * ('${rawTabName}'!$K$2:$K <= EOMONTH(TODAY()${s} 0))) + (($C$4="Pilih Rentang Tanggal") * ('${rawTabName}'!$K$2:$K >= IF($C$5=""${s} DATE(2000${s} 1${s} 1)${s} $C$5)) * ('${rawTabName}'!$K$2:$K <= IF($E$5=""${s} DATE(2099${s} 12${s} 31)${s} $E$5))) + ('${rawTabName}'!$C$2:$C = $C$4)) > 0)`;
 
   // 1. Data Nilai Sel (Row 1 - 15)
   const headerValues = [
@@ -76,11 +76,11 @@ export async function applyDashboardLayout(
       "",
       "=D7-F7",
       "",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$D$2:$D="INCOME") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$D$2:$D="INCOME") * ${dateCond} * (('${rawTabName}'!$E$2:$E = $E$4) + ($E$4 = "Semua Kategori")) * (('${rawTabName}'!$F$2:$F = $G$4) + ($G$4 = "Semua Dompet")))${s} 0))`,
       "",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$E$2:$E = $E$4) + ($E$4 = "Semua Kategori")) * (('${rawTabName}'!$F$2:$F = $G$4) + ($G$4 = "Semua Dompet")))${s} 0))`,
       "",
-      `=COUNT(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
+      `=IFERROR(ROWS(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ${dateCond} * (('${rawTabName}'!$E$2:$E = $E$4) + ($E$4 = "Semua Kategori")) * (('${rawTabName}'!$F$2:$F = $G$4) + ($G$4 = "Semua Dompet"))))${s} 0)`,
       "",
       "",
     ],
@@ -116,10 +116,10 @@ export async function applyDashboardLayout(
     [
       "",
       "Makanan & Minuman",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$E$2:$E=B11) * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$E$2:$E=B11) * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$F$2:$F = $G$4) + ($G$4 = "Semua Dompet")))${s} 0))`,
       "",
       "Cash",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$F$2:$F="Cash") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$F$2:$F="Cash") * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$E$2:$E = $E$4) + ($E$4 = "Semua Kategori")))${s} 0))`,
       "",
       "",
       "",
@@ -129,10 +129,10 @@ export async function applyDashboardLayout(
     [
       "",
       "Operasional ShopeeFood & Bensin",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$E$2:$E=B12) * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$E$2:$E=B12) * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$F$2:$F = $G$4) + ($G$4 = "Semua Dompet")))${s} 0))`,
       "",
       "ShopeePay",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$F$2:$F="ShopeePay") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$F$2:$F="ShopeePay") * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$E$2:$E = $E$4) + ($E$4 = "Semua Kategori")))${s} 0))`,
       "",
       "",
       "",
@@ -142,10 +142,10 @@ export async function applyDashboardLayout(
     [
       "",
       "Kosan & Tagihan Listrik",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$E$2:$E=B13) * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$E$2:$E=B13) * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$F$2:$F = $G$4) + ($G$4 = "Semua Dompet")))${s} 0))`,
       "",
       "GoPay",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$F$2:$F="GoPay") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$F$2:$F="GoPay") * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$E$2:$E = $E$4) + ($E$4 = "Semua Kategori")))${s} 0))`,
       "",
       "",
       "",
@@ -155,10 +155,10 @@ export async function applyDashboardLayout(
     [
       "",
       "Belanja Pribadi & Harian",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$E$2:$E=B14) * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!$F$2:$F=$G$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$E$2:$E=B14) * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$F$2:$F = $G$4) + ($G$4 = "Semua Dompet")))${s} 0))`,
       "",
       "SeaBank",
-      `=SUM(IFERROR(FILTER(${rawTabName}!$H$2:$H${s} (${rawTabName}!$A$2:$A<>"") * (${rawTabName}!$F$2:$F="SeaBank") * (${rawTabName}!$D$2:$D="EXPENSE") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!$E$2:$E=$E$4)))${s} 0))`,
+      `=SUM(IFERROR(FILTER('${rawTabName}'!$H$2:$H${s} ('${rawTabName}'!$A$2:$A<>"") * ('${rawTabName}'!$F$2:$F="SeaBank") * ('${rawTabName}'!$D$2:$D="EXPENSE") * ${dateCond} * (('${rawTabName}'!$E$2:$E = $E$4) + ($E$4 = "Semua Kategori")))${s} 0))` ,
       "",
       "",
       "",
@@ -195,7 +195,7 @@ export async function applyDashboardLayout(
   });
 
   // 2. Pasang Formula Filter Dinamis di Baris 16 Tab Dashboard
-  const filterFormula = `=IFERROR(SORT(FILTER(${rawTabName}!A2:J${s} (${rawTabName}!A2:A<>"") * ${dateCond} * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!E2:E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!F2:F=$G$4)) * (IF($I$4=""${s} 1${s} (ISNUMBER(SEARCH($I$4${s} ${rawTabName}!G2:G)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!E2:E)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!F2:F)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!B2:B))))))${s} 1${s} FALSE)${s} {"-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "Tidak ada data transaksi yang cocok dengan filter / kata kunci"${s} 0${s} "-"${s} "-"})`;
+  const filterFormula = `=IFERROR(SORT(FILTER('${rawTabName}'!A2:J${s} ('${rawTabName}'!A2:A<>"") * ${dateCond} * (('${rawTabName}'!E2:E=$E$4) + ($E$4="Semua Kategori")) * (('${rawTabName}'!F2:F=$G$4) + ($G$4="Semua Dompet")) * (($I$4="") + ISNUMBER(SEARCH($I$4${s} '${rawTabName}'!G2:G)) + ISNUMBER(SEARCH($I$4${s} '${rawTabName}'!E2:E)) + ISNUMBER(SEARCH($I$4${s} '${rawTabName}'!F2:F)) + ISNUMBER(SEARCH($I$4${s} '${rawTabName}'!B2:B))))${s} 1${s} FALSE)${s} SPLIT("- | - | - | - | - | - | Tidak ada data transaksi yang cocok dengan filter / kata kunci | 0 | - | -"${s} "|"))`;
 
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
