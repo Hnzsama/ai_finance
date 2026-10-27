@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Pool } from "pg";
-import { getDatabaseUrl } from "./db.ts";
+import { getDatabaseUrl, getSslConfig } from "./db.ts";
 
 const SQL = `
 -- 1. Tabel User
@@ -226,7 +226,7 @@ export async function runMigration(): Promise<void> {
 
   const pool = new Pool({
     connectionString: url,
-    ssl: { rejectUnauthorized: false },
+    ssl: getSslConfig(url),
   });
   try {
     console.log("Menyiapkan & migrasi tabel PostgreSQL (Multi-Device, User Privacy, Hutang, Aset, Budget, Subscription, Transfer)...");

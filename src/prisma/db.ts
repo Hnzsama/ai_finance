@@ -69,6 +69,19 @@ export function connectDatabase(): Promise<void> {
   return connection;
 }
 
+export function getSslConfig(url: string): boolean | { rejectUnauthorized: boolean } {
+  if (url.includes("sslmode=disable") || url.includes("ssl=false")) {
+    return false;
+  }
+  if (url.includes("localhost") || url.includes("127.0.0.1")) {
+    if (url.includes("sslmode=require") || url.includes("sslmode=verify-full") || url.includes("ssl=true")) {
+      return { rejectUnauthorized: false };
+    }
+    return false;
+  }
+  return { rejectUnauthorized: false };
+}
+
 let pool: Pool | undefined;
 
 export function getPgPool(): Pool {
@@ -76,7 +89,7 @@ export function getPgPool(): Pool {
     const url = getDatabaseUrl();
     pool = new Pool({
       connectionString: url,
-      ssl: { rejectUnauthorized: false },
+      ssl: getSslConfig(url),
     });
   }
   return pool;
