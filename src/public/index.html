@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Finance — Dashboard & Visualisasi Keuangan</title>
+  <meta name="description" content="Dashboard visualisasi keuangan personal, freelance & driver ShopeeFood dengan summary card, chart, dan filter tabel.">
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js CDN for interactive graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- TOP HEADER -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="brand-logo">💎</div>
+        <div class="brand-text">
+          <h1>Smart Finance</h1>
+          <span class="user-badge">Luqman • Kuliah + Freelance + Driver ShopeeFood</span>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button id="btn-sync-notion" class="btn btn-secondary">
+          <span class="icon">📑</span>
+          <span>Buka di Notion</span>
+        </button>
+        <button id="btn-refresh" class="btn btn-primary">
+          <span class="icon">🔄</span>
+          <span>Perbarui Data</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="tabs-nav" aria-label="Navigasi Halaman">
+      <button class="tab-btn active" data-tab="tab-overview">
+        <span class="tab-icon">📊</span> Ringkasan & Chart
+      </button>
+      <button class="tab-btn" data-tab="tab-transactions">
+        <span class="tab-icon">📋</span> Tabel Transaksi
+      </button>
+      <button class="tab-btn" data-tab="tab-wallets">
+        <span class="tab-icon">💳</span> Dompet & Rekening
+      </button>
+      <button class="tab-btn" data-tab="tab-budgets">
+        <span class="tab-icon">🎯</span> Anggaran Belanja
+      </button>
+      <button class="tab-btn" data-tab="tab-assets">
+        <span class="tab-icon">🪙</span> Aset & Piutang
+      </button>
+    </nav>
+
+    <!-- TAB 1: OVERVIEW DASHBOARD -->
+    <main id="tab-overview" class="tab-content active">
+      <!-- SUMMARY CARDS / KPI -->
+      <section class="kpi-grid">
+        <div class="kpi-card card-glow-emerald">
+          <div class="kpi-header">
+            <span class="kpi-title">Total Likuiditas Saldo</span>
+            <span class="kpi-icon">💳</span>
+          </div>
+          <div class="kpi-value" id="kpi-liquidity">Rp 0</div>
+          <div class="kpi-footer">
+            <span class="badge badge-success" id="kpi-wallets-count">4 Dompet Aktif</span>
+            <span class="kpi-subtext">Cash, ShopeePay, GoPay, Krom</span>
+          </div>
+        </div>
+
+        <div class="kpi-card card-glow-indigo">
+          <div class="kpi-header">
+            <span class="kpi-title">Total Valuasi Harta / Aset</span>
+            <span class="kpi-icon">🪙</span>
+          </div>
+          <div class="kpi-value" id="kpi-assets">Rp 0</div>
+          <div class="kpi-footer">
+            <span class="badge badge-gold">4 Gram Emas Antam</span>
+            <span class="kpi-subtext">+ Motor Beat, Asus TUF, HP</span>
+          </div>
+        </div>
+
+        <div class="kpi-card card-glow-amber">
+          <div class="kpi-header">
+            <span class="kpi-title">Plafon Anggaran Bulanan</span>
+            <span class="kpi-icon">🎯</span>
+          </div>
+          <div class="kpi-value" id="kpi-budget">Rp 0</div>
+          <div class="kpi-footer">
+            <span class="badge badge-info" id="kpi-budget-percent">0% Terpakai</span>
+            <span class="kpi-subtext">7 Kategori Terpasang</span>
+          </div>
+        </div>
+
+        <div class="kpi-card card-glow-cyan">
+          <div class="kpi-header">
+            <span class="kpi-title">Sisa Piutang Teman</span>
+            <span class="kpi-icon">🤝</span>
+          </div>
+          <div class="kpi-value" id="kpi-receivable">Rp 0</div>
+          <div class="kpi-footer">
+            <span class="badge badge-accent">Piutang Aktif</span>
+            <span class="kpi-subtext">Budi (Talangan Gacoan)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- CHARTS SECTION -->
+      <section class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>💳 Distribusi Saldo per Dompet</h3>
+            <span class="chart-subtitle">Likuiditas Cash & Rekening Bank</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="chart-wallets"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>🍩 Alokasi Pengeluaran per Kategori</h3>
+            <span class="chart-subtitle">Proporsi Kebutuhan Operasional & Kuliah</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="chart-categories"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card chart-card-wide">
+          <div class="chart-header">
+            <h3>📈 Arus Kas Finansial (Pemasukan vs Pengeluaran)</h3>
+            <span class="chart-subtitle">Cashflow bulan berjalan dan pendapatan driver/freelance</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="chart-cashflow"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- RECENT ACTIVITIES & QUICK STATS -->
+      <section class="overview-split">
+        <div class="panel-card">
+          <div class="panel-header">
+            <h3>⚡ Dompet Cepat</h3>
+            <a href="#" class="link-action" data-switch-tab="tab-wallets">Lihat Semua →</a>
+          </div>
+          <div class="wallets-mini-grid" id="wallets-mini-list">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header">
+            <h3>⏱️ Transaksi Terakhir</h3>
+            <a href="#" class="link-action" data-switch-tab="tab-transactions">Buka Tabel Lengkap →</a>
+          </div>
+          <div class="recent-list" id="recent-mini-list">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- TAB 2: TABEL TRANSAKSI WITH ADVANCED FILTER -->
+    <main id="tab-transactions" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>📋 Data Seluruh Transaksi</h2>
+          <p class="section-desc">Gunakan filter, pencarian teks, dan pemilah dompet untuk mengecek riwayat secara detail.</p>
+        </div>
+        <button id="btn-export-csv" class="btn btn-secondary">
+          <span class="icon">📥</span> Export CSV
+        </button>
+      </div>
+
+      <!-- FILTER CONTROLS BAR -->
+      <div class="filter-bar">
+        <div class="filter-group filter-search">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="filter-search-input" placeholder="Cari keterangan, kategori, atau nominal..." autocomplete="off">
+        </div>
+
+        <div class="filter-group">
+          <label for="filter-type">Tipe Transaksi</label>
+          <select id="filter-type">
+            <option value="ALL">Semua Tipe</option>
+            <option value="INCOME">Pemasukan (Income)</option>
+            <option value="EXPENSE">Pengeluaran (Expense)</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filter-wallet">Dompet / Rekening</label>
+          <select id="filter-wallet">
+            <option value="ALL">Semua Dompet</option>
+            <option value="Cash">Cash (Uang Tunai)</option>
+            <option value="ShopeePay">ShopeePay</option>
+            <option value="GoPay">GoPay</option>
+            <option value="Krom Bank">Krom Bank</option>
+            <option value="BCA">BCA</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label for="filter-category">Kategori</label>
+          <select id="filter-category">
+            <option value="ALL">Semua Kategori</option>
+            <option value="Makanan & Minuman">Makanan & Minuman</option>
+            <option value="Operasional ShopeeFood & Bensin">Operasional ShopeeFood & Bensin</option>
+            <option value="Pendapatan Driver ShopeeFood">Pendapatan Driver ShopeeFood</option>
+            <option value="Pendapatan Freelance">Pendapatan Freelance</option>
+            <option value="Kosan & Tagihan Listrik">Kosan & Listrik</option>
+            <option value="Kuota Internet & Pulsa">Kuota Internet & Pulsa</option>
+            <option value="Saldo Awal & Penyesuaian">Saldo Awal & Penyesuaian</option>
+          </select>
+        </div>
+
+        <div class="filter-group filter-reset">
+          <button id="btn-reset-filter" class="btn btn-outline" title="Reset semua filter">Reset Filter</button>
+        </div>
+      </div>
+
+      <!-- TRANSACTIONS TABLE -->
+      <div class="table-container">
+        <table class="data-table" id="transactions-table">
+          <thead>
+            <tr>
+              <th>Tanggal & Waktu</th>
+              <th>Keterangan</th>
+              <th>Tipe</th>
+              <th>Kategori</th>
+              <th>Dompet</th>
+              <th class="text-right">Nominal (IDR)</th>
+            </tr>
+          </thead>
+          <tbody id="transactions-tbody">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+        <div id="table-empty" class="table-empty-state" style="display: none;">
+          <span class="empty-icon">📂</span>
+          <p>Tidak ada transaksi yang cocok dengan filter yang dipilih.</p>
+        </div>
+      </div>
+      <div class="table-footer">
+        <span id="table-count-text">Menampilkan 0 transaksi</span>
+      </div>
+    </main>
+
+    <!-- TAB 3: DOMPET & REKENING -->
+    <main id="tab-wallets" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>💳 Manajemen Dompet & Rekening Bank</h2>
+          <p class="section-desc">Pemisahan saldo uang saku COD, dompet driver ShopeeFood, tabungan Krom Bank, dan transfer freelance.</p>
+        </div>
+      </div>
+
+      <div class="wallets-cards-grid" id="wallets-grid">
+        <!-- Populated via JS -->
+      </div>
+    </main>
+
+    <!-- TAB 4: BUDGET & PENGELUARAN -->
+    <main id="tab-budgets" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>🎯 Evaluasi Anggaran Belanja (Budget)</h2>
+          <p class="section-desc">Batas pengeluaran bulanan agar tidak boncos di tengah jalan.</p>
+        </div>
+      </div>
+
+      <div class="budgets-grid" id="budgets-grid">
+        <!-- Populated via JS -->
+      </div>
+    </main>
+
+    <!-- TAB 5: ASET & PIUTANG -->
+    <main id="tab-assets" class="tab-content">
+      <div class="section-header">
+        <div>
+          <h2>🪙 Portofolio Aset, Langganan & Hutang</h2>
+          <p class="section-desc">Pencatatan aset 4 gram emas Logam Mulia, kendaraan operasional, dan langganan bulanan.</p>
+        </div>
+      </div>
+
+      <div class="assets-layout">
+        <div class="assets-column">
+          <h3 class="column-title">💎 Daftar Aset Fisik & Investasi</h3>
+          <div class="assets-list" id="assets-list">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+        <div class="assets-column">
+          <h3 class="column-title">🔄 Langganan Rutin (Subscriptions)</h3>
+          <div class="subs-list" id="subs-list">
+            <!-- Populated via JS -->
+          </div>
+
+          <h3 class="column-title" style="margin-top: 2rem;">🤝 Catatan Piutang & Hutang</h3>
+          <div class="debts-list" id="debts-list">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="index.js"></script>
+</body>
+</html>
