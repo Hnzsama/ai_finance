@@ -213,7 +213,7 @@ export class GoogleSheetsService {
       ["", "Buku Kas Digital Pribadi • Sinkronisasi Otomatis WhatsApp Multi-Perangkat (HP & Laptop)", "", "", "", "", "", "", "", ""],
       // Row 3: Blank
       ["", "", "", "", "", "", "", "", "", ""],
-      // Row 4: Controls (Bulan di C4, Kategori di E4, Dompet di G4)
+      // Row 4: Controls (Bulan di C4, Kategori di E4, Dompet di G4, Search di I4)
       [
         "",
         "Filter Bulan:",
@@ -222,12 +222,12 @@ export class GoogleSheetsService {
         "Semua Kategori",
         "Filter Dompet:",
         "Semua Dompet",
+        "🔍 Cari:",
+        "",
         `Tahun: ${yearStr}`,
-        "Sync: Multi-Device",
-        this.getClientEmail(),
       ],
-      // Row 5: Blank
-      ["", "", "", "", "", "", "", "", "", ""],
+      // Row 5: Hint pencarian & status
+      ["", "", "", "", "", "", "", "", "(Ketik untuk filter live)", ""],
       // Row 6: KPI Card Titles
       [
         "",
@@ -365,9 +365,9 @@ export class GoogleSheetsService {
     });
 
     // 2. Pasang Formula Filter Dinamis di Baris 16 Tab Dashboard
-    // Formula ini yang membuat seluruh baris tabel transaksi di bawahnya otomatis merespon dropdown C4, E4, dan G4
+    // Formula ini yang membuat seluruh baris tabel transaksi di bawahnya otomatis merespon dropdown C4, E4, G4, dan Input Pencarian I4!
     // Dilengkapi SORT descending (1; FALSE) agar transaksi terbaru selalu berada di paling atas!
-    const filterFormula = `=IFERROR(SORT(FILTER(${rawTabName}!A2:J; (${rawTabName}!A2:A<>"") * (IF($C$4="Semua Bulan"${s} 1${s} ${rawTabName}!C2:C=$C$4)) * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!E2:E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!F2:F=$G$4)))${s} 1${s} FALSE)${s} {"-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "Tidak ada data transaksi yang cocok dengan filter"${s} 0${s} "-"${s} "-"})`;
+    const filterFormula = `=IFERROR(SORT(FILTER(${rawTabName}!A2:J${s} (${rawTabName}!A2:A<>"") * (IF($C$4="Semua Bulan"${s} 1${s} ${rawTabName}!C2:C=$C$4)) * (IF($E$4="Semua Kategori"${s} 1${s} ${rawTabName}!E2:E=$E$4)) * (IF($G$4="Semua Dompet"${s} 1${s} ${rawTabName}!F2:F=$G$4)) * (IF($I$4=""${s} 1${s} (ISNUMBER(SEARCH($I$4${s} ${rawTabName}!G2:G)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!E2:E)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!F2:F)) + ISNUMBER(SEARCH($I$4${s} ${rawTabName}!B2:B))))))${s} 1${s} FALSE)${s} {"-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "-"${s} "Tidak ada data transaksi yang cocok dengan filter / kata kunci"${s} 0${s} "-"${s} "-"})`;
 
     await sheets.spreadsheets.values.clear({
       spreadsheetId,
@@ -389,28 +389,30 @@ export class GoogleSheetsService {
         const monthDropdown = ["Semua Bulan", ...MONTH_NAMES];
         const categoryDropdown = [
           "Semua Kategori",
+          "Pendapatan Driver ShopeeFood",
+          "Pendapatan Freelance",
+          "Uang Saku & Kiriman Ortu",
+          "Beasiswa & Prestasi",
+          "Operasional ShopeeFood & Bensin",
+          "Servis & Perawatan Motor",
+          "Parkir & Tol",
           "Makanan & Minuman",
-          "Rokok & Tembakau",
-          "Transportasi & Bensin",
-          "Gaji & Pendapatan",
-          "Belanja & Kebutuhan",
-          "Tagihan & Utilitas",
-          "Hiburan & Langganan",
-          "Saldo Awal & Penyesuaian",
+          "Kosan & Tagihan Listrik",
+          "Kebutuhan Kuliah & Buku",
+          "Software & Tools Freelance",
+          "Kuota Internet & Pulsa",
+          "Belanja Pribadi & Harian",
+          "Hiburan & Nongkrong",
+          "Kesehatan & Obat",
           "Lainnya",
         ];
         const walletDropdown = [
           "Semua Dompet",
           "Cash",
-          "BCA",
-          "Mandiri",
-          "BRI",
-          "BNI",
-          "Jago",
-          "GoPay",
-          "OVO",
-          "DANA",
           "ShopeePay",
+          "GoPay",
+          "SeaBank",
+          "Krom",
         ];
 
         // Lebar kolom ideal agar teks dan dropdown arrow tidak pernah terpotong
@@ -419,12 +421,12 @@ export class GoogleSheetsService {
           { index: 1, width: 175 }, // B: TANGGAL & WAKTU / Category Label
           { index: 2, width: 145 }, // C: BULAN / Month Dropdown / Category Amount
           { index: 3, width: 115 }, // D: TIPE / Category Label
-          { index: 4, width: 210 }, // E: KATEGORI / Category Dropdown / Wallet Label
+          { index: 4, width: 220 }, // E: KATEGORI / Category Dropdown / Wallet Label
           { index: 5, width: 130 }, // F: DOMPET / Wallet Label / Wallet Amount
-          { index: 6, width: 270 }, // G: KETERANGAN / Wallet Dropdown
-          { index: 7, width: 160 }, // H: NOMINAL (RP) / Total Transaksi
-          { index: 8, width: 175 }, // I: PERANGKAT
-          { index: 9, width: 230 }, // J: WHATSAPP SENDER
+          { index: 6, width: 260 }, // G: KETERANGAN / Wallet Dropdown
+          { index: 7, width: 130 }, // H: NOMINAL (RP) / Cari Label
+          { index: 8, width: 210 }, // I: PERANGKAT / Search Input Box!
+          { index: 9, width: 220 }, // J: WHATSAPP SENDER / Info
         ];
 
         await sheets.spreadsheets.batchUpdate({
@@ -565,6 +567,35 @@ export class GoogleSheetsService {
                   fields: "userEnteredFormat(backgroundColor,textFormat)",
                 },
               })),
+
+              // Search Box Highlight (Cell I4: colIdx 8)
+              {
+                repeatCell: {
+                  range: { sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 8, endColumnIndex: 9 },
+                  cell: {
+                    userEnteredFormat: {
+                      backgroundColor: { red: 1.0, green: 0.99, blue: 0.88 }, // Warm light gold/yellow #fef9c3
+                      textFormat: { bold: true, fontSize: 10, foregroundColor: { red: 0.08, green: 0.12, blue: 0.22 } },
+                    },
+                    note: "Ketik teks apa saja (misal: kopi, bensin, shopeefood, bca) untuk memfilter data transaksi secara instan!",
+                  },
+                  fields: "userEnteredFormat(backgroundColor,textFormat),note",
+                },
+              },
+
+              // Hint pencarian (Cell I5: row index 4, col index 8)
+              {
+                repeatCell: {
+                  range: { sheetId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 8, endColumnIndex: 9 },
+                  cell: {
+                    userEnteredFormat: {
+                      textFormat: { italic: true, fontSize: 8, foregroundColor: { red: 0.4, green: 0.45, blue: 0.55 } },
+                      horizontalAlignment: "CENTER",
+                    },
+                  },
+                  fields: "userEnteredFormat(textFormat,horizontalAlignment)",
+                },
+              },
 
               // 7. Styling KPI Card Net Balance (Col B-C, Row 6-8)
               {
@@ -819,13 +850,610 @@ export class GoogleSheetsService {
   }
 
   /**
+   * Pastikan tab/lembar kerja tertentu sudah ada di Spreadsheet
+   */
+  public async ensureTabExists(
+    spreadsheetId: string,
+    tabName: string,
+    rowCount: number = 300,
+    columnCount: number = 10,
+    frozenRowCount: number = 7
+  ): Promise<number | undefined> {
+    const sheets = this.getSheetsClient();
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const existing = meta.data.sheets?.find((s) => s.properties?.title === tabName);
+    if (existing) {
+      return existing.properties?.sheetId ?? undefined;
+    }
+
+    const res = await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: tabName,
+                gridProperties: {
+                  rowCount,
+                  columnCount,
+                  frozenRowCount,
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    return res.data.replies?.[0].addSheet?.properties?.sheetId ?? undefined;
+  }
+
+  /**
+   * Sinkronisasi Tab Hutang & Piutang
+   */
+  public async syncDebtsTab(spreadsheetId: string, userId?: string | null, locale?: string | null): Promise<void> {
+    const sheets = this.getSheetsClient();
+    const tabName = "Hutang_Piutang";
+    const sheetId = await this.ensureTabExists(spreadsheetId, tabName, 300, 10, 7);
+
+    const isSemicolon = !locale || locale.startsWith("id") || !locale.startsWith("en");
+    const s = isSemicolon ? ";" : ",";
+
+    const res = await executeSql(
+      `SELECT * FROM public."Debt" 
+       WHERE "userId" = $1 OR ($1 IS NULL AND "userId" IS NULL)
+       ORDER BY "createdAt" DESC`,
+      [userId || null]
+    );
+    const debts = res.rows || [];
+
+    const headerValues = [
+      ["", "SMART FINANCE • BUKU CATATAN HUTANG & PIUTANG", "", "", "", "", "", "", ""],
+      ["", "Catatan Kewajiban Bayar (Hutang) & Hak Tagih (Piutang) Pribadi • Terkoneksi WhatsApp", "", "", "", "", "", "", ""],
+      ["", "", "", "", "", "", "", "", ""],
+      ["", "● TOTAL PIUTANG (HAK TAGIH)", "", "▲ TOTAL HUTANG (KEWAJIBAN)", "", "◆ POSISI BERSIH (NET)", "", "", ""],
+      [
+        "",
+        `=SUMIF(C8:C${s} "RECEIVABLE"${s} E8:E)`,
+        "",
+        `=SUMIF(C8:C${s} "DEBT"${s} E8:E)`,
+        "",
+        `=B5-D5`,
+        "",
+        "",
+        "",
+      ],
+      ["", "Uang di luar yang belum dibayar orang", "", "Uang yang harus kita bayar ke orang", "", "Piutang dikurangi Hutang", "", "", ""],
+      ["NO", "NAMA ORANG / PIHAK", "TIPE", "NOMINAL AWAL (RP)", "SISA BELUM LUNAS (RP)", "STATUS", "KETERANGAN / JATUH TEMPO", "TANGGAL INPUT", "TERAKHIR DIUPDATE"],
+    ];
+
+    const dataRows = debts.length > 0
+      ? debts.map((d: any, idx: number) => {
+          const created = d.createdAt ? new Date(d.createdAt).toLocaleDateString("id-ID") : "-";
+          const updated = d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("id-ID") : "-";
+          const tipeLabel = d.type === "RECEIVABLE" ? "RECEIVABLE" : "DEBT";
+          return [
+            idx + 1,
+            d.personName || "-",
+            tipeLabel,
+            Number(d.amount || 0),
+            Number(d.remainingAmount || 0),
+            d.status || "UNPAID",
+            d.description || "-",
+            created,
+            updated,
+          ];
+        })
+      : [["-", "Belum ada catatan hutang atau piutang aktif", "-", 0, 0, "LUNAS", "Semua kewajiban & piutang bersih", "-", "-"]];
+
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${tabName}'!A1:I300`,
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${tabName}'!A1:I${7 + dataRows.length}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [...headerValues, ...dataRows] },
+    });
+
+    if (sheetId !== undefined) {
+      const colWidths = [
+        { index: 0, width: 50 },  // NO
+        { index: 1, width: 200 }, // NAMA
+        { index: 2, width: 130 }, // TIPE
+        { index: 3, width: 160 }, // NOMINAL AWAL
+        { index: 4, width: 160 }, // SISA
+        { index: 5, width: 110 }, // STATUS
+        { index: 6, width: 250 }, // KETERANGAN
+        { index: 7, width: 130 }, // TANGGAL INPUT
+        { index: 8, width: 130 }, // TERAKHIR UPDATE
+      ];
+      await this.applySubTabStyling(spreadsheetId, sheetId, 7, dataRows.length, [3, 4], colWidths);
+    }
+  }
+
+  /**
+   * Sinkronisasi Tab Aset & Kekayaan
+   */
+  public async syncAssetsTab(spreadsheetId: string, userId?: string | null): Promise<void> {
+    const sheets = this.getSheetsClient();
+    const tabName = "Aset_Kekayaan";
+    const sheetId = await this.ensureTabExists(spreadsheetId, tabName, 300, 8, 7);
+
+    const res = await executeSql(
+      `SELECT * FROM public."Asset" 
+       WHERE "userId" = $1 OR ($1 IS NULL AND "userId" IS NULL)
+       ORDER BY "value" DESC`,
+      [userId || null]
+    );
+    const assets = res.rows || [];
+
+    const headerValues = [
+      ["", "SMART FINANCE • INVENTARIS & PORTOFOLIO ASET", "", "", "", "", ""],
+      ["", "Daftar Kepemilikan Aset Fisik, Kendaraan, Elektronik & Simpanan Investasi", "", "", "", "", ""],
+      ["", "", "", "", "", "", ""],
+      ["", "● TOTAL ESTIMASI NILAI SELURUH ASET", "", "▲ JUMLAH ITEM ASET", "", "◆ KATEGORI PORTOFOLIO", ""],
+      [
+        "",
+        `=SUM(D8:D)`,
+        "",
+        `=COUNTA(B8:B)`,
+        "",
+        `Portofolio Aset`,
+        "",
+      ],
+      ["", "Valuasi Net Worth Harta Fisik & Investasi", "", "Total Barang / Unit Terdaftar", "", "Investasi & Operasional", ""],
+      ["NO", "NAMA ASET", "KATEGORI", "ESTIMASI NILAI PASAR (RP)", "CATATAN / KONDISI", "TANGGAL INPUT", "TERAKHIR DIUPDATE"],
+    ];
+
+    const dataRows = assets.length > 0
+      ? assets.map((a: any, idx: number) => {
+          const created = a.createdAt ? new Date(a.createdAt).toLocaleDateString("id-ID") : "-";
+          const updated = a.updatedAt ? new Date(a.updatedAt).toLocaleDateString("id-ID") : "-";
+          return [
+            idx + 1,
+            a.name,
+            a.category || "GENERAL",
+            Number(a.value || 0),
+            a.notes || "-",
+            created,
+            updated,
+          ];
+        })
+      : [["-", "Belum ada aset terdaftar", "-", 0, "Catat motor, laptop, hp atau emas Anda", "-", "-"]];
+
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${tabName}'!A1:G300`,
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${tabName}'!A1:G${7 + dataRows.length}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [...headerValues, ...dataRows] },
+    });
+
+    if (sheetId !== undefined) {
+      const colWidths = [
+        { index: 0, width: 50 },  // NO
+        { index: 1, width: 240 }, // NAMA ASET
+        { index: 2, width: 140 }, // KATEGORI
+        { index: 3, width: 180 }, // NILAI
+        { index: 4, width: 280 }, // CATATAN
+        { index: 5, width: 130 }, // TANGGAL INPUT
+        { index: 6, width: 130 }, // TERAKHIR UPDATE
+      ];
+      await this.applySubTabStyling(spreadsheetId, sheetId, 7, dataRows.length, [3], colWidths);
+    }
+  }
+
+  /**
+   * Sinkronisasi Tab Budget & Monitoring Anggaran
+   */
+  public async syncBudgetsTab(
+    spreadsheetId: string,
+    userId?: string | null,
+    yearStr: string = "2026",
+    locale?: string | null
+  ): Promise<void> {
+    const sheets = this.getSheetsClient();
+    const tabName = "Budget_Anggaran";
+    const rawTabName = `Data_${yearStr}`;
+    const sheetId = await this.ensureTabExists(spreadsheetId, tabName, 300, 9, 7);
+
+    const isSemicolon = !locale || locale.startsWith("id") || !locale.startsWith("en");
+    const s = isSemicolon ? ";" : ",";
+
+    const res = await executeSql(
+      `SELECT b.*, c.name as category_name 
+       FROM public."Budget" b
+       LEFT JOIN public."Category" c ON b."categoryId" = c.id
+       WHERE b."userId" = $1 OR ($1 IS NULL AND b."userId" IS NULL)
+       ORDER BY b.amount DESC`,
+      [userId || null]
+    );
+    const budgets = res.rows || [];
+
+    const headerValues = [
+      ["", "SMART FINANCE • MONITORING & TARGET ANGGARAN BULANAN", "", "", "", "", "", ""],
+      ["", "Batas Maksimal Pengeluaran per Kategori untuk Mencegah Boncos • Real-Time", "", "", "", "", "", ""],
+      ["", "", "", "", "", "", "", ""],
+      ["", "● TOTAL TARGET ANGGARAN", "", "▲ TOTAL TERPAKAI BULAN INI", "", "▼ SISA ANGGARAN TERSEDIA", "", ""],
+      [
+        "",
+        `=SUM(D8:D)`,
+        "",
+        `=SUM(E8:E)`,
+        "",
+        `=B5-D5`,
+        "",
+        "",
+      ],
+      ["", "Alokasi Maksimal Per Bulan", "", "Realisasi Pengeluaran Berjalan", "", "Sisa Kuota Belanja Aman", "", ""],
+      ["NO", "KATEGORI", "PERIODE", "TARGET ANGGARAN (RP)", "REALISASI TERPAKAI (RP)", "SISA ANGGARAN (RP)", "STATUS (%)", "EVALUASI"],
+    ];
+
+    const dataRows = budgets.length > 0
+      ? budgets.map((b: any, idx: number) => {
+          const rowNum = 8 + idx;
+          const catName = b.category_name || "Lainnya";
+          const terpakaiFormula = `=IFERROR(SUMIFS(${rawTabName}!$H$2:$H${s} ${rawTabName}!$E$2:$E${s} B${rowNum}${s} ${rawTabName}!$D$2:$D${s} "EXPENSE")${s} 0)`;
+          const sisaFormula = `=D${rowNum}-E${rowNum}`;
+          const statusFormula = `=IF(D${rowNum}>0${s} TEXT(E${rowNum}/D${rowNum}${s} "0.0%")${s} "0%")`;
+          const evaluasiFormula = `=IF(E${rowNum}>D${rowNum}${s} "⚠️ OVERBUDGET"${s} IF(E${rowNum}>0.8*D${rowNum}${s} "⚡ MENDEKATI BATAS"${s} "✅ AMAN"))`;
+
+          return [
+            idx + 1,
+            catName,
+            b.period || "MONTHLY",
+            Number(b.amount || 0),
+            terpakaiFormula,
+            sisaFormula,
+            statusFormula,
+            evaluasiFormula,
+          ];
+        })
+      : [["-", "Belum ada budget yang diatur", "MONTHLY", 0, 0, 0, "0%", "Ketik 'set budget makan 500rb'"]];
+
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${tabName}'!A1:H300`,
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${tabName}'!A1:H${7 + dataRows.length}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [...headerValues, ...dataRows] },
+    });
+
+    if (sheetId !== undefined) {
+      const colWidths = [
+        { index: 0, width: 50 },  // NO
+        { index: 1, width: 220 }, // KATEGORI
+        { index: 2, width: 100 }, // PERIODE
+        { index: 3, width: 170 }, // TARGET
+        { index: 4, width: 170 }, // TERPAKAI
+        { index: 5, width: 170 }, // SISA
+        { index: 6, width: 100 }, // STATUS %
+        { index: 7, width: 160 }, // EVALUASI
+      ];
+      await this.applySubTabStyling(spreadsheetId, sheetId, 7, dataRows.length, [3, 4, 5], colWidths);
+    }
+  }
+
+  /**
+   * Sinkronisasi Tab Langganan & Subscriptions
+   */
+  public async syncSubscriptionsTab(spreadsheetId: string, userId?: string | null, locale?: string | null): Promise<void> {
+    const sheets = this.getSheetsClient();
+    const tabName = "Langganan_Sub";
+    const sheetId = await this.ensureTabExists(spreadsheetId, tabName, 300, 9, 7);
+
+    const isSemicolon = !locale || locale.startsWith("id") || !locale.startsWith("en");
+    const s = isSemicolon ? ";" : ",";
+
+    const res = await executeSql(
+      `SELECT s.*, w.name as wallet_name 
+       FROM public."Subscription" s
+       LEFT JOIN public."Wallet" w ON s."walletId" = w.id
+       WHERE s."userId" = $1 OR ($1 IS NULL AND s."userId" IS NULL)
+       ORDER BY s.amount DESC`,
+      [userId || null]
+    );
+    const subs = res.rows || [];
+
+    const headerValues = [
+      ["", "SMART FINANCE • DAFTAR LANGGANAN & BIAYA RUTIN (SUBSCRIPTIONS)", "", "", "", "", "", ""],
+      ["", "Pelacak Komitmen Pengeluaran Berulang Bulanan / Tahunan Pribadi", "", "", "", "", "", ""],
+      ["", "", "", "", "", "", "", ""],
+      ["", "● TOTAL BIAYA RUTIN BULANAN", "", "▲ JUMLAH SUBSCRIPTION AKTIF", "", "◆ METODE PEMBAYARAN", "", ""],
+      [
+        "",
+        `=SUMIF(F8:F${s} "ACTIVE"${s} C8:C)`,
+        "",
+        `=COUNTIF(F8:F${s} "ACTIVE")`,
+        "",
+        `Auto Debit / E-Wallet`,
+        "",
+        "",
+      ],
+      ["", "Komitmen Pengeluaran Tetap / Bulan", "", "Layanan Langganan Aktif", "", "Sumber Saldo Terpotong", "", ""],
+      ["NO", "NAMA LAYANAN / SUBSCRIPTION", "BIAYA (RP)", "SIKLUS", "TANGGAL TAGIHAN (TGL)", "STATUS", "DOMPET PEMBAYARAN", "CATATAN"],
+    ];
+
+    const dataRows = subs.length > 0
+      ? subs.map((s: any, idx: number) => {
+          return [
+            idx + 1,
+            s.name,
+            Number(s.amount || 0),
+            s.billingCycle || "MONTHLY",
+            s.billingDay ? `Tgl ${s.billingDay}` : "-",
+            s.status || "ACTIVE",
+            s.wallet_name || "ShopeePay",
+            s.notes || "-",
+          ];
+        })
+      : [["-", "Belum ada langganan terdaftar", 0, "MONTHLY", "-", "ACTIVE", "-", "Ketik 'tambah langganan spotify 28k'"]];
+
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${tabName}'!A1:H300`,
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${tabName}'!A1:H${7 + dataRows.length}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [...headerValues, ...dataRows] },
+    });
+
+    if (sheetId !== undefined) {
+      const colWidths = [
+        { index: 0, width: 50 },  // NO
+        { index: 1, width: 230 }, // NAMA
+        { index: 2, width: 150 }, // BIAYA
+        { index: 3, width: 110 }, // SIKLUS
+        { index: 4, width: 130 }, // TGL TAGIHAN
+        { index: 5, width: 100 }, // STATUS
+        { index: 6, width: 160 }, // DOMPET
+        { index: 7, width: 220 }, // CATATAN
+      ];
+      await this.applySubTabStyling(spreadsheetId, sheetId, 7, dataRows.length, [2], colWidths);
+    }
+  }
+
+  /**
+   * Template Styling Universal untuk Sub-Tab (Banner, KPI Cards, Header & Data Rows)
+   */
+  private async applySubTabStyling(
+    spreadsheetId: string,
+    sheetId: number,
+    tableHeaderRowIndex: number,
+    dataRowCount: number,
+    currencyColIndices: number[],
+    colWidths: { index: number; width: number }[]
+  ): Promise<void> {
+    const sheets = this.getSheetsClient();
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            // 1. Column widths
+            ...colWidths.map((cw) => ({
+              updateDimensionProperties: {
+                range: {
+                  sheetId,
+                  dimension: "COLUMNS",
+                  startIndex: cw.index,
+                  endIndex: cw.index + 1,
+                },
+                properties: { pixelSize: cw.width },
+                fields: "pixelSize",
+              },
+            })),
+
+            // 2. Banner Row 1 (Title)
+            {
+              repeatCell: {
+                range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: colWidths.length },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.05, green: 0.08, blue: 0.14 },
+                    textFormat: { bold: true, fontSize: 13, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: "CENTER",
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+              },
+            },
+
+            // 3. Banner Row 2 (Subtitle)
+            {
+              repeatCell: {
+                range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: colWidths.length },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.08, green: 0.11, blue: 0.18 },
+                    textFormat: { fontSize: 9, foregroundColor: { red: 0.6, green: 0.65, blue: 0.75 } },
+                    horizontalAlignment: "CENTER",
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+              },
+            },
+
+            // 4. KPI Card Titles (Row 4, index 3)
+            {
+              repeatCell: {
+                range: { sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 1, endColumnIndex: 3 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.94, green: 0.96, blue: 1.0 },
+                    textFormat: { bold: true, fontSize: 10, foregroundColor: { red: 0.18, green: 0.22, blue: 0.45 } },
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat)",
+              },
+            },
+            {
+              repeatCell: {
+                range: { sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 3, endColumnIndex: 5 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.92, green: 0.99, blue: 0.95 },
+                    textFormat: { bold: true, fontSize: 10, foregroundColor: { red: 0.02, green: 0.4, blue: 0.25 } },
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat)",
+              },
+            },
+            {
+              repeatCell: {
+                range: { sheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 5, endColumnIndex: 7 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.96, green: 0.95, blue: 1.0 },
+                    textFormat: { bold: true, fontSize: 10, foregroundColor: { red: 0.4, green: 0.15, blue: 0.6 } },
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat)",
+              },
+            },
+
+            // 5. KPI Card Values (Row 5, index 4)
+            {
+              repeatCell: {
+                range: { sheetId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 1, endColumnIndex: 3 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.94, green: 0.96, blue: 1.0 },
+                    textFormat: { bold: true, fontSize: 13, foregroundColor: { red: 0.18, green: 0.22, blue: 0.45 } },
+                    numberFormat: { type: "CURRENCY", pattern: '"Rp "#,##0' },
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,numberFormat)",
+              },
+            },
+            {
+              repeatCell: {
+                range: { sheetId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 3, endColumnIndex: 5 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.92, green: 0.99, blue: 0.95 },
+                    textFormat: { bold: true, fontSize: 13, foregroundColor: { red: 0.02, green: 0.4, blue: 0.25 } },
+                    numberFormat: { type: "CURRENCY", pattern: '"Rp "#,##0' },
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,numberFormat)",
+              },
+            },
+            {
+              repeatCell: {
+                range: { sheetId, startRowIndex: 4, endRowIndex: 5, startColumnIndex: 5, endColumnIndex: 7 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.96, green: 0.95, blue: 1.0 },
+                    textFormat: { bold: true, fontSize: 13, foregroundColor: { red: 0.4, green: 0.15, blue: 0.6 } },
+                    numberFormat: { type: "CURRENCY", pattern: '"Rp "#,##0' },
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,numberFormat)",
+              },
+            },
+
+            // 6. Table Header (Row 7, index tableHeaderRowIndex - 1)
+            {
+              repeatCell: {
+                range: {
+                  sheetId,
+                  startRowIndex: tableHeaderRowIndex - 1,
+                  endRowIndex: tableHeaderRowIndex,
+                  startColumnIndex: 0,
+                  endColumnIndex: colWidths.length,
+                },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.08, green: 0.11, blue: 0.18 },
+                    textFormat: { bold: true, fontSize: 9, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                    horizontalAlignment: "CENTER",
+                  },
+                },
+                fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+              },
+            },
+
+            // 7. Format currency columns in data rows
+            ...currencyColIndices.map((colIdx) => ({
+              repeatCell: {
+                range: {
+                  sheetId,
+                  startRowIndex: tableHeaderRowIndex,
+                  endRowIndex: tableHeaderRowIndex + Math.max(dataRowCount, 50),
+                  startColumnIndex: colIdx,
+                  endColumnIndex: colIdx + 1,
+                },
+                cell: {
+                  userEnteredFormat: {
+                    numberFormat: { type: "CURRENCY", pattern: '"Rp "#,##0' },
+                    textFormat: { bold: true },
+                    horizontalAlignment: "RIGHT",
+                  },
+                },
+                fields: "userEnteredFormat(numberFormat,textFormat,horizontalAlignment)",
+              },
+            })),
+
+            // 8. Align column 0 (NO) center
+            {
+              repeatCell: {
+                range: {
+                  sheetId,
+                  startRowIndex: tableHeaderRowIndex,
+                  endRowIndex: tableHeaderRowIndex + Math.max(dataRowCount, 50),
+                  startColumnIndex: 0,
+                  endColumnIndex: 1,
+                },
+                cell: {
+                  userEnteredFormat: { horizontalAlignment: "CENTER" },
+                },
+                fields: "userEnteredFormat(horizontalAlignment)",
+              },
+            },
+          ],
+        },
+      });
+    } catch (err) {
+      console.warn(`[GoogleSheets] Notice styling tab (sheetId: ${sheetId}):`, err);
+    }
+  }
+
+  /**
    * Sinkronisasi seluruh transaksi personal user yang ada di DB ke Google Sheets
+   * Sekaligus menyinkronkan seluruh tab modular (Hutang, Aset, Budget, Subscriptions)
    */
   public async syncAllUserTransactions(
     userId: string,
     spreadsheetId: string
   ): Promise<{ syncedCount: number; error?: string }> {
     try {
+      const sheets = this.getSheetsClient();
+      const meta = await sheets.spreadsheets.get({ spreadsheetId });
+      const locale = meta.data.properties?.locale;
+      const currentYear = new Date().getFullYear();
+
+      // Selalu sinkronkan seluruh tab modular (Hutang, Aset, Budget, Subscriptions)
+      await this.syncDebtsTab(spreadsheetId, userId, locale);
+      await this.syncAssetsTab(spreadsheetId, userId);
+      await this.syncBudgetsTab(spreadsheetId, userId, String(currentYear), locale);
+      await this.syncSubscriptionsTab(spreadsheetId, userId, locale);
+
       // Ambil transaksi user yang bersangkutan beserta nama wallet dan kategorinya
       const res = await executeSql(
         `SELECT t.*, w.name as wallet_name, c.name as category_name 
@@ -839,7 +1467,6 @@ export class GoogleSheetsService {
 
       const rows = res.rows || [];
       if (rows.length === 0) {
-        const currentYear = new Date().getFullYear();
         await this.ensureYearTab(spreadsheetId, currentYear);
         return { syncedCount: 0 };
       }
@@ -885,7 +1512,6 @@ export class GoogleSheetsService {
           ];
         });
 
-        const sheets = this.getSheetsClient();
         // Bersihkan dulu area transaksi mentah lama di Data_{year}
         try {
           await sheets.spreadsheets.values.clear({
@@ -902,7 +1528,7 @@ export class GoogleSheetsService {
         });
 
         // Pastikan formula filter dinamis di tab tahun berjalan tetap ada
-        await this.applyDashboardLayout(spreadsheetId, tabName, undefined, String(year));
+        await this.applyDashboardLayout(spreadsheetId, tabName, undefined, String(year), locale);
 
         totalSynced += dataRows.length;
       }
