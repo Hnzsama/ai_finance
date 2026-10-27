@@ -2,6 +2,7 @@ import "../env.js";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import { parseFinancialMessage, type ParseResult, type TransactionData } from "../handlers/parser.js";
+import { formatIDR } from "../prisma/finance/types.ts";
 
 export type { ParseResult as AIResponse, TransactionData as ExtractedData };
 
@@ -176,13 +177,30 @@ DAFTAR TOOLS YANG BISA DIPANGGIL (FUNCTION CATALOG):
    - Panggil saat: Pengguna meminta visualisasi di Notion, sinkronisasi ke Notion, atau minta link dashboard Notion (cth: "notion", "sync notion", "link notion", "dashboard notion", "lihat di notion", "buka notion").
    - args: {}
 
-13. "chat"
+13. "manage_assets"
+   - Panggil saat: Pengguna mencatat atau melihat aset / harta kekayaan / barang berharga (bukan transaksi pengeluaran/pemasukan rutin dompet) (cth: "tambahkan aset emas 4 gram estimasi pergramnya 2.400.000", "tambah aset motor beat 12jt", "daftar aset", "aset saya apa aja").
+   - PENTING: Jika ada jumlah satuan/gram dan harga per satuan (misal: 4 gram x 2.400.000): HITUNG TOTAL NILAINYA SECARA AKURAT (4 * 2.400.000 = 9.600.000)!
+   - args: { "action": "RECORD" | "LIST" | "CLEAR", "name": string, "value": number, "category": "VEHICLE" | "ELECTRONIC" | "FINANCIAL" | "OTHER" }
+
+14. "manage_debt"
+   - Panggil saat: Mencatat hutang atau piutang (cth: "catat hutang ke budi 50rb", "si tono ada piutang 100k", "daftar hutang").
+   - args: { "action": "RECORD" | "LIST" | "CLEAR", "type": "DEBT" | "RECEIVABLE", "personName": string, "amount": number, "notes": string | null }
+
+15. "set_budget"
+   - Panggil saat: Mengatur batas/target anggaran kategori bulanan (cth: "budget makan 1jt sebulan", "anggaran bensin 200rb", "daftar budget").
+   - args: { "action": "SET" | "LIST" | "CLEAR", "category": string, "amount": number }
+
+16. "manage_subscriptions"
+   - Panggil saat: Mencatat langganan rutin berulang (cth: "langganan netflix 186k tgl 15", "daftar langganan").
+   - args: { "action": "RECORD" | "LIST" | "CLEAR", "name": string, "amount": number, "billingDay": number | null }
+
+17. "chat"
    - Panggil saat: Obrolan santai, konsultasi keuangan, sapaan, tanya tips (cth: "halo", "boros gak saya?", "saran hemat kopi dong").
    - args: {}
 
 FORMAT OUTPUT WAJIB JSON VALID (HANYA JSON MURNI TANPA MARKDOWN):
 {
-  "function": "reset_transactions" | "set_wallet_balance" | "record_transaction" | "query_transactions" | "list_wallets" | "get_summary" | "get_recent_transactions" | "delete_last_transaction" | "set_personality" | "connect_sheet" | "sync_sheet" | "sync_notion" | "chat",
+  "function": "reset_transactions" | "set_wallet_balance" | "record_transaction" | "query_transactions" | "list_wallets" | "get_summary" | "get_recent_transactions" | "delete_last_transaction" | "set_personality" | "connect_sheet" | "sync_sheet" | "sync_notion" | "manage_assets" | "manage_debt" | "set_budget" | "manage_subscriptions" | "chat",
   "args": { ... },
   "reply": "Pesan balasan yang sesuai dengan kepribadian yang aktif"
 }
@@ -323,6 +341,53 @@ export class AiService {
             parsed.function = "manage_subscriptions";
             parsed.args = { action: "CLEAR" };
           }
+        }
+
+        // Jika local parser mengenali intent MANAGE_ASSETS (misal: "tambahkan aset baru emas 4 gram estimasi pergramnya 2.400.000")
+        // JANGAN BIARKAN AI KELIRU MENJADIKANNYA record_transaction!
+        if (local.action === "MANAGE_ASSETS") {
+          parsed.function = "manage_assets";
+          parsed.args = {
+            action: local.data?.actionPayload?.action || "RECORD",
+            name: local.data?.actionPayload?.name || parsed.args.name || "Aset Pribadi",
+            value: local.data?.amount ?? (Number(parsed.args.value) || 0),
+            category: local.data?.actionPayload?.category || parsed.args.category || "OTHER",
+          };
+          if (local.data?.amount && local.data?.actionPayload?.action !== "CLEAR") {
+            const cleanVal = formatIDR(local.data.amount);
+            parsed.reply = `Siap, aset *${parsed.args.name}* dengan estimasi nilai *${cleanVal}* berhasil didaftarkan ke inventaris aset Anda!`;
+          }
+        }
+
+        // Jangan biarkan AI keliru menjadikan MANAGE_DEBT, SET_BUDGET, MANAGE_SUBSCRIPTIONS sebagai transaksi rutin dompet
+        if (local.action === "MANAGE_DEBT" && local.data?.actionPayload?.action !== "CLEAR") {
+          parsed.function = "manage_debt";
+          parsed.args = {
+            action: local.data?.actionPayload?.action || "RECORD",
+            type: local.data?.actionPayload?.type || "DEBT",
+            personName: local.data?.actionPayload?.personName || parsed.args.personName || "Orang Lain",
+            amount: local.data?.amount ?? (Number(parsed.args.amount) || 0),
+            notes: local.data?.actionPayload?.notes || null,
+          };
+        }
+
+        if (local.action === "SET_BUDGET" && local.data?.actionPayload?.action !== "CLEAR") {
+          parsed.function = "set_budget";
+          parsed.args = {
+            action: local.data?.actionPayload?.action || "SET",
+            category: local.data?.category || "Lainnya",
+            amount: local.data?.amount ?? (Number(parsed.args.amount) || 0),
+          };
+        }
+
+        if (local.action === "MANAGE_SUBSCRIPTIONS" && local.data?.actionPayload?.action !== "CLEAR") {
+          parsed.function = "manage_subscriptions";
+          parsed.args = {
+            action: local.data?.actionPayload?.action || "RECORD",
+            name: local.data?.description || "Langganan",
+            amount: local.data?.amount ?? (Number(parsed.args.amount) || 0),
+            billingDay: local.data?.actionPayload?.billingDay || null,
+          };
         }
 
         // Jika pesan mengindikasikan gaji/gajian/bonus, pastikan dipetakan ke record_transaction INCOME

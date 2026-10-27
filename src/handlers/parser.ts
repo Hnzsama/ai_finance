@@ -115,9 +115,45 @@ export function detectCategory(text: string, isIncome: boolean = false): string 
   return "Lainnya (Pengeluaran)";
 }
 
-export function extractNumericAmount(text: string): { amount: number; raw: string } | null {
+export function extractNumericAmount(text: string): {
+  amount: number;
+  raw: string;
+  qty?: number;
+  unitPrice?: number;
+  isMultiplied?: boolean;
+} | null {
   const lower = text.toLowerCase();
-  const amountRegex = /([+-]?)\s*(?:(rp\.?)\s*)?(\d+(?:[.,]\d+)?|\d{1,3}(?:[.,]\d{3})*)\s*(k|rb|jt|ribu|juta)?\b/gi;
+
+  // 1. Cek perkalian kuantitas x harga satuan
+  // Contoh: "4 gram estimasi pergramnya 2.400.000", "3 porsi @ 25.000", "5x 50rb", "2 liter perliter 10k"
+  const qtyPriceRegex = /(\d+(?:[.,]\d+)?)\s*(?:gram|gr|g|pcs|buah|biji|porsi|lembar|item|box|bungkus|paket|orang|liter|l|meter|m|hari|bln|bulan)?\s*(?:estimasi\s+)?(?:per\s*(?:gram|gr|g|pcs|buah|porsi|liter|item|bulan|hari|orang)|@|x|\*|kali)\s*(?:seharga|sebesar|harga|nya)?\s*(?:rp\.?\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*(k|rb|jt|ribu|juta)?/i;
+  const qMatch = lower.match(qtyPriceRegex);
+  if (qMatch) {
+    const qty = parseFloat(qMatch[1].replace(/,/g, "."));
+    let unitPriceRaw = qMatch[2];
+    const unit = (qMatch[3] || "").toLowerCase();
+    let unitPrice = 0;
+    if (unit) {
+      unitPrice = parseFloat(unitPriceRaw.replace(/,/g, "."));
+      if (unit === "k" || unit === "rb" || unit === "ribu") unitPrice *= 1_000;
+      if (unit === "jt" || unit === "juta") unitPrice *= 1_000_000;
+    } else {
+      unitPrice = parseFloat(unitPriceRaw.replace(/\./g, "").replace(/,/g, "."));
+    }
+    const total = Math.round(qty * unitPrice);
+    if (!isNaN(total) && total > 0) {
+      return {
+        amount: total,
+        raw: qMatch[0],
+        qty,
+        unitPrice,
+        isMultiplied: true,
+      };
+    }
+  }
+
+  // 2. Format angka ribuan Indonesia: 2.400.000 atau 50.000 atau desimal 2,5jt
+  const amountRegex = /([+-]?)\s*(?:(rp\.?)\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:[.,]\d+)?)\s*(k|rb|jt|ribu|juta)?\b/gi;
   const allMatches = [...lower.matchAll(amountRegex)];
 
   if (allMatches.length === 0) return null;
@@ -129,8 +165,26 @@ export function extractNumericAmount(text: string): { amount: number; raw: strin
 
     if (unit) {
       rawNum = rawNum.replace(/,/g, ".");
-    } else {
-      rawNum = rawNum.replace(/[.,]/g, "");
+    } else if (rawNum.includes(".") && rawNum.includes(",")) {
+      rawNum = rawNum.replace(/\./g, "").replace(/,/g, ".");
+    } else if ((rawNum.match(/\./g) || []).length > 1) {
+      rawNum = rawNum.replace(/\./g, "");
+    } else if ((rawNum.match(/,/g) || []).length > 1) {
+      rawNum = rawNum.replace(/,/g, "");
+    } else if (rawNum.includes(".")) {
+      const parts = rawNum.split(".");
+      if (parts[1] && parts[1].length === 3) {
+        rawNum = rawNum.replace(/\./g, "");
+      } else {
+        rawNum = rawNum.replace(/\./g, ".");
+      }
+    } else if (rawNum.includes(",")) {
+      const parts = rawNum.split(",");
+      if (parts[1] && parts[1].length === 3) {
+        rawNum = rawNum.replace(/,/g, "");
+      } else {
+        rawNum = rawNum.replace(/,/g, ".");
+      }
     }
 
     let val = parseFloat(rawNum);
@@ -454,21 +508,34 @@ export function parseFinancialMessage(rawText: string): ParseResult {
     }
   }
 
-  // 8. Cek Aset: "daftar aset", "aset motor beat 12jt"
+  // 8. Cek Aset: "daftar aset", "aset motor beat 12jt", "tambahkan aset baru emas 4 gram estimasi pergramnya 2.400.000"
   if (/\b(aset|asset|harta|kekayaan)\b/i.test(lower)) {
     const extracted = extractNumericAmount(text);
     if (extracted && extracted.amount > 0) {
+      // Ekstraksi nama aset yang bersih dan rapi
+      let assetName = text
+        .replace(/^(tambah(kan)?|catat|masuk(k)?an|input|simpan)\s+(aset|asset|harta|kekayaan)\s*(baru)?\s*/i, "")
+        .replace(/\b(aset|asset|harta|kekayaan)\s*(baru)?\s*/i, "")
+        .trim();
+
+      assetName = assetName
+        .replace(/\s*(?:estimasi|seharga|harga|senilai|per\s*\w+|@|x|\*|kali)\s*.*$/i, "")
+        .trim();
+
+      if (!assetName) assetName = "Aset Pribadi";
+      assetName = assetName.charAt(0).toUpperCase() + assetName.slice(1);
+
       return {
         action: "MANAGE_ASSETS",
         data: {
           type: null,
           amount: extracted.amount,
-          description: text,
+          description: `Aset: ${assetName}`,
           category: "Aset",
           wallet: null,
-          actionPayload: { action: "RECORD", value: extracted.amount, name: text },
+          actionPayload: { action: "RECORD", value: extracted.amount, name: assetName },
         },
-        reply_message: `🏍️ *Aset Dicatat:* Nilai aset sebesar ${formatIDR(extracted.amount)} berhasil ditambahkan.`,
+        reply_message: `🛵 *Aset Dicatat:* *${assetName}* dengan estimasi nilai *${formatIDR(extracted.amount)}* berhasil ditambahkan ke inventaris aset Anda.`,
       };
     } else {
       return {
