@@ -66,12 +66,13 @@ export const handleIncomingMessage = async (
       switchNotice = `🔄 *${deviceSwitch.description}*\n\n`;
     }
 
-    if (text.toLowerCase() === "ping") {
+    const quickCmd = text.toLowerCase().trim();
+    if (["ping", "test", "tes", "p"].includes(quickCmd)) {
       const devBadge = deviceInfo.deviceType === "DESKTOP" ? "Laptop 💻 (@lid)" : "HP 📱 (@s.whatsapp.net)";
       await sock.sendMessage(
         remoteJid,
         {
-          text: `${switchNotice}Pong! 🏓 Finny aktif & siap membantu keuangan Anda.\n📱 *Perangkat Aktif:* ${devBadge}`,
+          text: `${switchNotice}Pong! 🏓 Finny aktif & siap digunakan!\n📱 *Perangkat Aktif:* ${devBadge}\n⚡ *Status:* Online & Siap Catat Keuangan`,
         },
         { quoted: msg }
       );

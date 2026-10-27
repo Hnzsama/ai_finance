@@ -222,6 +222,34 @@ export class AiService {
   }
 
   /**
+   * Pre-load model Ollama ke RAM di background saat bot start agar pesan pertama tidak mengalami cold-start lag
+   */
+  public async warmup(): Promise<void> {
+    try {
+      console.log(`[AI Service] Pre-loading model ${this.model} ke RAM...`);
+      const res = await fetch(`${this.host}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          prompt: "ping",
+          keep_alive: "24h",
+          options: {
+            num_predict: 1,
+            num_ctx: 2048,
+          },
+        }),
+        signal: AbortSignal.timeout(60000),
+      });
+      if (res.ok) {
+        console.log(`✅ [AI Service] Model ${this.model} siap di RAM.`);
+      }
+    } catch {
+      // Tidak apa jika warmup timeout atau gagal di awal
+    }
+  }
+
+  /**
    * Generative tool calling via Ollama Qwen 2.5 dengan fallback otomatis ke parser lokal
    */
   async planAndAct(
@@ -241,6 +269,7 @@ export class AiService {
           prompt: userText,
           format: "json",
           stream: false,
+          keep_alive: "24h",
           options: {
             temperature: 0.7,
             top_p: 0.9,
