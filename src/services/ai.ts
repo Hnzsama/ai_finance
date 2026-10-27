@@ -242,8 +242,10 @@ export class AiService {
           format: "json",
           stream: false,
           options: {
-            temperature: 0.85,
+            temperature: 0.7,
             top_p: 0.9,
+            num_ctx: 2048,
+            num_predict: 300,
           },
         }),
         signal: AbortSignal.timeout(this.timeoutMs),
