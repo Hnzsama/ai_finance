@@ -92,5 +92,10 @@ export interface RecentTransactionItem {
   date: string;
 }
 
-export const formatIDR = (n: bigint | number): string =>
-  `Rp ${new Intl.NumberFormat("id-ID").format(typeof n === "bigint" ? Number(n) : n)}`;
+export const formatIDR = (n: bigint | number): string => {
+  const num = typeof n === "bigint" ? Number(n) : n;
+  if (num < 0) {
+    return `-Rp ${new Intl.NumberFormat("id-ID").format(Math.abs(num))}`;
+  }
+  return `Rp ${new Intl.NumberFormat("id-ID").format(num)}`;
+};

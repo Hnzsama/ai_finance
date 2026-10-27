@@ -130,8 +130,9 @@ DAFTAR TOOLS YANG BISA DIPANGGIL (FUNCTION CATALOG):
    - args: { "confirm": true }
 
 2. "set_wallet_balance"
-   - Panggil HANYA saat: Mengatur saldo awal akun baru / rekening (cth: "saldo awal bca 5jt", "cash ada 500rb", "isi saldo awal gopay 100k").
-   - JANGAN panggil ini jika pengguna menerima gaji atau uang masuk!
+   - Panggil saat: Mengatur/memperbarui saldo dompet atau akun (cth: "saldo awal bca 5jt", "cash ada 500rb", "isi saldo awal gopay 100k", "masukan shopeepay minus 52.652", "saldo shopeepay minus 50rb").
+   - PENTING: Untuk driver online (ShopeeFood, Grab, Gojek), saldo dompet BISA bernilai MINUS/negatif! (contoh: "minus 52.652" -> args: { "wallet": "ShopeePay", "amount": -52652 }).
+   - JANGAN panggil ini jika pengguna menerima gaji atau uang masuk normal!
    - args: { "wallet": string, "amount": number }
 
 3. "record_transaction"
@@ -292,6 +293,22 @@ export class AiService {
 
         // Jika pesan mengindikasikan gaji/gajian/bonus, pastikan dipetakan ke record_transaction INCOME
         const lower = userText.toLowerCase();
+        // Jika saldo dompet diatur ke minus (driver ShopeeFood / Gojek), pastikan nominal bertanda negatif
+        if (parsed.function === "set_wallet_balance") {
+          if (lower.includes("minus") || lower.includes("-")) {
+            parsed.args.amount = -Math.abs(Number(parsed.args.amount) || local.data?.amount || 0);
+          }
+        }
+
+        // Jika local parser mengenali intent SET_WALLET_BALANCE (misal: "masukan shopeepay minus 52.652")
+        // cegah AI salah mengklasifikasikan sebagai record_transaction INCOME
+        if (local.action === "SET_WALLET_BALANCE") {
+          parsed.function = "set_wallet_balance";
+          parsed.args.wallet = local.data?.wallet || parsed.args.wallet || "ShopeePay";
+          parsed.args.amount = local.data?.amount ?? parsed.args.amount;
+        }
+
+        // Jika pesan mengindikasikan gaji/gajian/bonus, pastikan dipetakan ke record_transaction INCOME
         if ((lower.includes("gaji") || lower.includes("gajian") || lower.includes("bonus")) && parsed.function === "set_wallet_balance") {
           parsed.function = "record_transaction";
           parsed.args.type = "INCOME";
@@ -422,6 +439,27 @@ export class AiService {
           args: { persona: p.data?.description || "BESTIE" },
           reply: p.reply_message,
         };
+      case "SET_WALLET_BALANCE": {
+        let reply = p.reply_message;
+        const amount = p.data?.amount || 0;
+        if (persona === "ISTRI_GALAK") {
+          reply = amount < 0
+            ? "Saldo ShopeePay kamu minus Mas?! Astaga, jangan lupa ditutup itu minusnya kalau udah dapat orderan cash ya! 😤"
+            : "Udah aku set ya saldo dompet kamu Mas! Jangan boros-boros!";
+        } else if (persona === "BESTIE") {
+          reply = amount < 0
+            ? "Sip bro, saldo minus driver udah diset! Semangat narik ShopeeFood-nya biar minusnya ketutup cuan! 🛵💨"
+            : "Sip bro, saldo dompet udah diupdate!";
+        }
+        return {
+          function: "set_wallet_balance",
+          args: {
+            wallet: p.data?.wallet || "ShopeePay",
+            amount,
+          },
+          reply,
+        };
+      }
       case "TRANSFER_BALANCE":
         return {
           function: "transfer_balance",

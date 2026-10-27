@@ -91,7 +91,10 @@ const SUMMARY_KEYWORDS = [
   "rekap", "pengeluaranku", "pemasukanku", "laporan", "summary", "total", "saldo keseluruhan"
 ];
 
-const formatIDR = (n: number) => `Rp ${new Intl.NumberFormat("id-ID").format(n)}`;
+const formatIDR = (n: number) => {
+  if (n < 0) return `-Rp ${new Intl.NumberFormat("id-ID").format(Math.abs(n))}`;
+  return `Rp ${new Intl.NumberFormat("id-ID").format(n)}`;
+};
 
 export function detectCategory(text: string, isIncome: boolean = false): string {
   const lower = text.toLowerCase();
@@ -234,6 +237,41 @@ export function parseFinancialMessage(rawText: string): ParseResult {
           actionPayload: { type: "COD_SETTLEMENT" },
         },
         reply_message: `📦 *Pesanan COD Dicatat!*\nSaldo *ShopeePay* terpotong *${formatIDR(extracted.amount)}*, uang *Cash* di saku bertambah *${formatIDR(extracted.amount)}*.`,
+      };
+    }
+  }
+
+  // 4b. Cek Atur Saldo Dompet / Saldo Awal (termasuk saldo MINUS driver ShopeeFood / Grab / Gojek)
+  // Contoh: "masukan shopeepay minus 52.652", "saldo awal bca 5jt", "saldo shopeepay minus 50rb", "atur saldo cash 200k", "shopeepay minus 52652"
+  const isSetBalance =
+    /\b(saldo awal|atur saldo|set saldo|isi saldo|saldo sekarang)\b/i.test(lower) ||
+    (/\b(masuk(k)?an|input|catat)\b/i.test(lower) && /\b(minus|-)\b/i.test(lower)) ||
+    (/\b(shopeepay|gopay|bca|cash|dana|ovo|seabank|mandiri|bri|jago)\b/i.test(lower) && /\b(minus|-)\b/i.test(lower) && !/\b(transfer|tf|beli|bayar)\b/i.test(lower));
+
+  if (isSetBalance && !isCodOrder) {
+    const extracted = extractNumericAmount(text);
+    if (extracted && extracted.amount > 0) {
+      let targetWallet = "ShopeePay";
+      for (const [key, val] of Object.entries(WALLETS)) {
+        if (new RegExp(`\\b${key}\\b`, "i").test(lower)) {
+          targetWallet = val;
+          break;
+        }
+      }
+
+      const isNegative = /\b(minus|min|-)\b/i.test(lower);
+      const finalAmount = isNegative ? -Math.abs(extracted.amount) : extracted.amount;
+
+      return {
+        action: "SET_WALLET_BALANCE",
+        data: {
+          type: null,
+          amount: finalAmount,
+          description: `Atur Saldo ${targetWallet}`,
+          category: "Saldo Awal & Penyesuaian",
+          wallet: targetWallet,
+        },
+        reply_message: `💳 *Saldo Dompet Diatur:*\nSaldo *${targetWallet}* berhasil disesuaikan menjadi *${formatIDR(finalAmount)}*${isNegative ? " (Saldo Minus Normal Driver ShopeeFood)" : ""}.`,
       };
     }
   }
@@ -489,7 +527,8 @@ export function parseFinancialMessage(rawText: string): ParseResult {
   }
 
   const amount = extracted.amount;
-  const isIncome = text.startsWith("+") || INCOME_KEYWORDS.some((kw) => lower.includes(kw));
+  const hasMinus = /\b(minus|min|-)\b/i.test(lower);
+  const isIncome = !hasMinus && (text.startsWith("+") || INCOME_KEYWORDS.some((kw) => lower.includes(kw)));
   const type: TransactionType = isIncome ? "INCOME" : "EXPENSE";
 
   let wallet: string | null = null;

@@ -49,9 +49,11 @@ export async function handleSetWalletBalance(ctx: ActionContext): Promise<void> 
 
     const res = await setWalletInitialBalance(walletName, amount, user.id, deviceInfo.jid);
     let reply = plan.reply ? `${plan.reply}\n\n` : "";
+    const isNegative = amount < 0;
+    const badge = isNegative ? " (Saldo Minus Driver)" : "";
     reply +=
       `💳 *Saldo Diatur:* ${res.wallet}\n` +
-      `💰 *Saldo Baru:* ${res.targetBalance}\n\n` +
+      `💰 *Saldo Baru:* ${res.targetBalance}${badge}\n\n` +
       `💡 _Ketik "dompet" untuk cek saldo akun lainnya._`;
 
     await sock.sendMessage(remoteJid, { text: switchNotice + reply }, { quoted: msg });
