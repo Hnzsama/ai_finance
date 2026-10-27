@@ -39,21 +39,23 @@ export interface ParseResult {
 }
 
 const WALLETS: Record<string, string> = {
+  gopay: "GoPay",
+  shopeepay: "ShopeePay",
+  shopeefood: "ShopeePay",
+  spay: "ShopeePay",
+  seabank: "SeaBank",
+  "sea bank": "SeaBank",
+  krom: "Krom",
+  "krom bank": "Krom",
+  cash: "Cash",
+  tunai: "Cash",
   bca: "BCA",
   mandiri: "Mandiri",
   bri: "BRI",
   bni: "BNI",
   jago: "Jago",
-  gopay: "GoPay",
   ovo: "OVO",
   dana: "DANA",
-  shopeepay: "ShopeePay",
-  shopeefood: "ShopeePay",
-  spay: "ShopeePay",
-  cash: "Cash",
-  tunai: "Cash",
-  krom: "Krom Bank",
-  "krom bank": "Krom Bank",
 };
 
 // Kategori Pemasukan & Pengeluaran Khusus Mahasiswa + Freelance + Driver ShopeeFood
