@@ -9,7 +9,7 @@ import {
   updateUserSpreadsheet,
 } from "../services/user.ts";
 import { dispatchAction, type ActionContext } from "./actions/index.ts";
-import { parseMultiWalletBalances } from "./parser.ts";
+import { parseFinancialMessage, parseMultiWalletBalances } from "./parser.ts";
 
 type WAMessage = proto.IWebMessageInfo;
 
@@ -264,6 +264,34 @@ export const handleIncomingMessage = async (
         rawText: text,
       };
       await dispatchAction("set_wallet_balance", actionCtx);
+      return;
+    }
+
+    // Fast-path mutasi COD ShopeeFood / transfer antar dompet (misal: "tuker shopeepay ke cash 10000 cod shopee driver")
+    const parsedLocal = parseFinancialMessage(text);
+    if (parsedLocal.action === "TRANSFER_BALANCE" && parsedLocal.data) {
+      const plan = {
+        function: "transfer_balance" as const,
+        args: {
+          fromWallet: parsedLocal.data.fromWallet || "ShopeePay",
+          toWallet: parsedLocal.data.toWallet || "Cash",
+          amount: parsedLocal.data.amount,
+          isCod: parsedLocal.data.isCod,
+          notes: parsedLocal.data.description,
+        },
+        reply: parsedLocal.reply_message,
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("transfer_balance", actionCtx);
       return;
     }
 

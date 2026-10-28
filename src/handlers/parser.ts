@@ -221,9 +221,9 @@ export interface WalletBalanceItem {
 export function parseMultiWalletBalances(rawText: string): WalletBalanceItem[] | null {
   const lower = rawText.toLowerCase();
 
-  // Jangan tangkap jika ada kata metode bayar atau kata kerja transaksi/transfer/kebutuhan
+  // Jangan tangkap jika ada kata metode bayar atau kata kerja transaksi/transfer/kebutuhan/COD
   if (
-    /\b(pake|pakai|via|lewat|beli|bayar|makan|minum|bensin|belanja|gaji|gajian|bonus|dapat|terima|kirim|transfer|tf|tarik|topup|top up|hutang|piutang|pinjam|pinjem|aset|asset)\b/i.test(
+    /\b(pake|pakai|via|lewat|ke|menuju|to|dari|from|tuker|tukar|geser|cod|order|pesanan|beli|bayar|makan|minum|bensin|belanja|gaji|gajian|bonus|dapat|terima|kirim|transfer|tf|tarik|topup|top up|hutang|piutang|pinjam|pinjem|aset|asset)\b/i.test(
       lower
     )
   ) {
@@ -421,11 +421,20 @@ export function parseFinancialMessage(rawText: string): ParseResult {
   }
 
   // 4. Cek COD Order ShopeeFood (Pindah saldo ShopeePay ke Cash)
-  // Contoh: "dapat cod 35rb", "order cod 45k", "dapat cod shopeepay motong nambah cash 25rb"
+  // Contoh: "tuker shopeepay ke cash 10000 cod shopee driver", "dapat cod 35rb", "order cod 45k", "pesanan cod 30rb"
   const isCodOrder = /\bcod\b/i.test(lower);
   if (isCodOrder) {
     const extracted = extractNumericAmount(text);
     if (extracted && extracted.amount > 0) {
+      let fromW = "ShopeePay";
+      let toW = "Cash";
+
+      const keMatch = lower.match(new RegExp(`\\b(${Object.keys(WALLETS).join("|")})\\b\\s*(?:ke|to|menuju)\\s*\\b(${Object.keys(WALLETS).join("|")})\\b`, "i"));
+      if (keMatch) {
+        fromW = WALLETS[keMatch[1].toLowerCase()] || fromW;
+        toW = WALLETS[keMatch[2].toLowerCase()] || toW;
+      }
+
       return {
         action: "TRANSFER_BALANCE",
         data: {
@@ -433,13 +442,13 @@ export function parseFinancialMessage(rawText: string): ParseResult {
           amount: extracted.amount,
           description: "Pesanan COD ShopeeFood",
           category: "Operasional ShopeeFood",
-          wallet: "Cash",
-          fromWallet: "ShopeePay",
-          toWallet: "Cash",
+          wallet: toW,
+          fromWallet: fromW,
+          toWallet: toW,
           isCod: true,
           actionPayload: { type: "COD_SETTLEMENT" },
         },
-        reply_message: `📦 *Pesanan COD Dicatat!*\nSaldo *ShopeePay* terpotong *${formatIDR(extracted.amount)}*, uang *Cash* di saku bertambah *${formatIDR(extracted.amount)}*.`,
+        reply_message: `📦 *Pesanan COD ShopeeFood Dicatat!*\nSaldo *${fromW}* terpotong *${formatIDR(extracted.amount)}*, uang *${toW}* di saku bertambah *${formatIDR(extracted.amount)}*.`,
       };
     }
   }
@@ -473,48 +482,55 @@ export function parseFinancialMessage(rawText: string): ParseResult {
   }
 
   // 5. Cek Transfer Antar Dompet biasa
-  // Contoh: "transfer 50rb dari bca ke shopeepay", "pindah dana 100k jago ke gopay", "tarik shopeepay 200rb ke bca"
-  const isTransfer = /\b(transfer|tf|pindah|tarik saldo|kirim)\b/i.test(lower) && /\b(ke|menuju|to)\b/i.test(lower);
+  // Contoh: "transfer 50rb dari bca ke shopeepay", "pindah dana 100k jago ke gopay", "tarik shopeepay 200rb ke bca", "tuker shopeepay ke cash 10k"
+  const isTransfer = /\b(transfer|tf|pindah|tarik saldo|kirim|tuker|tukar|geser)\b/i.test(lower) && /\b(ke|menuju|to)\b/i.test(lower);
   if (isTransfer) {
     const extracted = extractNumericAmount(text);
     if (extracted && extracted.amount > 0) {
-      // Cari nama dompet sumber dan tujuan
       let fromW = "ShopeePay";
       let toW = "BCA";
 
-      const words = lower.split(/\s+/);
-      const foundWallets: string[] = [];
-      for (const w of words) {
-        if (WALLETS[w] && !foundWallets.includes(WALLETS[w])) {
-          foundWallets.push(WALLETS[w]);
+      const keMatch = lower.match(new RegExp(`\\b(${Object.keys(WALLETS).join("|")})\\b\\s*(?:ke|to|menuju)\\s*\\b(${Object.keys(WALLETS).join("|")})\\b`, "i"));
+      if (keMatch) {
+        fromW = WALLETS[keMatch[1].toLowerCase()] || fromW;
+        toW = WALLETS[keMatch[2].toLowerCase()] || toW;
+      } else {
+        const words = lower.split(/\s+/);
+        const foundWallets: string[] = [];
+        for (const w of words) {
+          if (WALLETS[w] && !foundWallets.includes(WALLETS[w])) {
+            foundWallets.push(WALLETS[w]);
+          }
+        }
+
+        if (foundWallets.length >= 2) {
+          fromW = foundWallets[0];
+          toW = foundWallets[1];
+        } else if (foundWallets.length === 1) {
+          if (lower.includes(`ke ${foundWallets[0].toLowerCase()}`)) {
+            toW = foundWallets[0];
+            fromW = toW === "Cash" ? "ShopeePay" : "BCA";
+          } else {
+            fromW = foundWallets[0];
+            toW = fromW === "ShopeePay" ? "Cash" : "ShopeePay";
+          }
         }
       }
 
-      if (foundWallets.length >= 2) {
-        fromW = foundWallets[0];
-        toW = foundWallets[1];
-      } else if (foundWallets.length === 1) {
-        if (lower.includes(`ke ${foundWallets[0].toLowerCase()}`)) {
-          toW = foundWallets[0];
-          fromW = toW === "Cash" ? "ShopeePay" : "BCA";
-        } else {
-          fromW = foundWallets[0];
-          toW = fromW === "ShopeePay" ? "Cash" : "ShopeePay";
-        }
-      }
+      const isCod = /\b(cod|shopee driver|driver)\b/i.test(lower) || (fromW === "ShopeePay" && toW === "Cash");
 
       return {
         action: "TRANSFER_BALANCE",
         data: {
           type: null,
           amount: extracted.amount,
-          description: `Transfer ${fromW} ke ${toW}`,
-          category: "Transfer",
+          description: isCod ? "Pesanan COD ShopeeFood" : `Transfer dari ${fromW} ke ${toW}`,
+          category: isCod ? "Operasional ShopeeFood" : "Transfer Antar Dompet",
           wallet: toW,
           fromWallet: fromW,
           toWallet: toW,
-          isCod: false,
-          actionPayload: { type: "TRANSFER" },
+          isCod,
+          actionPayload: { fromWallet: fromW, toWallet: toW, isCod },
         },
         reply_message: `🔄 *Transfer Berhasil!*\nMemindahkan *${formatIDR(extracted.amount)}* dari *${fromW}* ke *${toW}*.`,
       };

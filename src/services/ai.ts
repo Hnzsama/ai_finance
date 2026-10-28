@@ -329,6 +329,16 @@ export class AiService {
           }
         }
 
+        // Jika local parser mengenali intent TRANSFER_BALANCE (misal: "tuker shopeepay ke cash 10000 cod shopee driver")
+        // cegah AI salah mengklasifikasikannya sebagai set_wallet_balance atau record_transaction!
+        if (local.action === "TRANSFER_BALANCE") {
+          parsed.function = "transfer_balance";
+          parsed.args.fromWallet = local.data?.fromWallet || parsed.args.fromWallet || "ShopeePay";
+          parsed.args.toWallet = local.data?.toWallet || parsed.args.toWallet || "Cash";
+          parsed.args.amount = local.data?.amount ?? (Number(parsed.args.amount) || 0);
+          parsed.args.isCod = local.data?.isCod ?? Boolean(parsed.args.isCod);
+        }
+
         // Proteksi System Commands agar AI tidak pernah berhalusinasi mengembalikan tipe "chat"
         if (local.action === "RESET_TRANSACTIONS") {
           parsed.function = "reset_transactions";

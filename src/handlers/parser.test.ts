@@ -72,4 +72,13 @@ assert.equal(t10.data?.actionPayload?.items[1].wallet, "ShopeePay");
 assert.equal(t10.data?.actionPayload?.items[1].amount, -52652);
 console.log("✔ Test 10 passed:", t10.reply_message);
 
-console.log("\n🎉 All 10 parser test cases passed perfectly!");
+// Test 11: COD Shopee Driver Transfer (ShopeePay ke Cash)
+const t11 = parseFinancialMessage("tuker shopeepay ke cash 10000 cod shopee driver");
+assert.equal(t11.action, "TRANSFER_BALANCE");
+assert.equal(t11.data?.fromWallet, "ShopeePay");
+assert.equal(t11.data?.toWallet, "Cash");
+assert.equal(t11.data?.amount, 10000);
+assert.equal(t11.data?.isCod, true);
+console.log("✔ Test 11 passed:", t11.reply_message);
+
+console.log("\n🎉 All 11 parser test cases passed perfectly!");

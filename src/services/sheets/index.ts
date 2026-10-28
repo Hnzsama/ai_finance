@@ -270,11 +270,50 @@ export class GoogleSheetsService {
         [userId]
       );
 
-      const rows = res.rows || [];
+      // Ambil riwayat transfer & COD settlement user
+      const tfRes = await executeSql(
+        `SELECT tf.*, fw.name as from_wallet_name, tw.name as to_wallet_name
+         FROM public."Transfer" tf
+         LEFT JOIN public."Wallet" fw ON tf."fromWalletId" = fw.id
+         LEFT JOIN public."Wallet" tw ON tf."toWalletId" = tw.id
+         WHERE (tf."userId" = $1 OR tf."userId" IS NULL)
+         ORDER BY tf."createdAt" ASC`,
+        [userId]
+      );
+
+      const allRows: any[] = [...(res.rows || [])];
+      for (const tf of tfRes.rows || []) {
+        const isCod = tf.type === "COD_SETTLEMENT";
+        // 1. Mutasi keluar (EXPENSE) dari dompet asal (ShopeePay)
+        allRows.push({
+          createdAt: tf.createdAt,
+          type: "EXPENSE",
+          category_name: isCod ? "Operasional ShopeeFood" : "Transfer Antar Dompet",
+          wallet_name: tf.from_wallet_name || "ShopeePay",
+          description: isCod ? "Settlement COD (Potong Saldo)" : (tf.description || "Transfer Keluar"),
+          amount: tf.amount,
+          deviceType: "MOBILE",
+          jid: tf.jid,
+        });
+        // 2. Mutasi masuk (INCOME) ke dompet tujuan (Cash)
+        allRows.push({
+          createdAt: tf.createdAt,
+          type: "INCOME",
+          category_name: isCod ? "Operasional ShopeeFood" : "Transfer Antar Dompet",
+          wallet_name: tf.to_wallet_name || "Cash",
+          description: isCod ? "Uang Tunai COD Pelanggan (Masuk Kas)" : (tf.description || "Transfer Masuk"),
+          amount: tf.amount,
+          deviceType: "MOBILE",
+          jid: tf.jid,
+        });
+      }
+
+      // Urutkan semua transaksi dan transfer berdasarkan waktu
+      allRows.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
       // Kelompokkan transaksi berdasarkan tahun
       const byYear = new Map<number, any[]>();
-      for (const row of rows) {
+      for (const row of allRows) {
         const d = new Date(row.createdAt);
         const y = d.getFullYear();
         if (!byYear.has(y)) byYear.set(y, []);
