@@ -265,7 +265,7 @@ export class GoogleSheetsService {
          FROM public."Transaction" t
          LEFT JOIN public."Wallet" w ON t."walletId" = w.id
          LEFT JOIN public."Category" c ON t."categoryId" = c.id
-         WHERE t."userId" = $1
+         WHERE (t."userId" = $1 OR t."userId" IS NULL)
          ORDER BY t."createdAt" ASC`,
         [userId]
       );
@@ -304,7 +304,7 @@ export class GoogleSheetsService {
         try {
           await sheets.spreadsheets.values.clear({
             spreadsheetId,
-            range: `'${rawTabName}'!A2:K1000`,
+            range: `'${rawTabName}'!A2:K`,
           });
         } catch {}
 

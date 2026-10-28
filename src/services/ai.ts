@@ -326,6 +326,21 @@ export class AiService {
           parsed.args.amount = local.data?.amount ?? parsed.args.amount;
         }
 
+        // Proteksi System Commands agar AI tidak pernah berhalusinasi mengembalikan tipe "chat"
+        if (local.action === "RESET_TRANSACTIONS") {
+          parsed.function = "reset_transactions";
+          parsed.args = { confirm: true };
+        } else if (local.action === "DELETE_LAST_TRANSACTION") {
+          parsed.function = "delete_last_transaction";
+          parsed.args = {};
+        } else if (local.action === "SYNC_SHEET") {
+          parsed.function = "sync_sheet";
+          parsed.args = {};
+        } else if (local.action === "SYNC_NOTION") {
+          parsed.function = "sync_notion";
+          parsed.args = {};
+        }
+
         // Jika local parser mengenali aksi CLEAR spesifik modul (Aset, Hutang, Budget, Langganan), jangan biarkan AI keliru reset transaksi!
         if (local.data?.actionPayload?.action === "CLEAR") {
           if (local.action === "MANAGE_ASSETS") {
@@ -580,6 +595,12 @@ export class AiService {
           args: p.data?.actionPayload || { action: "LIST" },
           reply: p.reply_message,
         };
+      case "SYNC_SHEET":
+        return {
+          function: "sync_sheet",
+          args: {},
+          reply: p.reply_message,
+        };
       case "SYNC_NOTION":
         return {
           function: "sync_notion",
@@ -610,6 +631,7 @@ export class AiService {
       case "get_summary": return "QUERY_SUMMARY";
       case "get_recent_transactions": return "RECENT_TRANSACTIONS";
       case "delete_last_transaction": return "DELETE_LAST_TRANSACTION";
+      case "sync_sheet": return "SYNC_SHEET";
       case "sync_notion": return "SYNC_NOTION";
       case "chat": return "CHAT";
       default: return "UNKNOWN";

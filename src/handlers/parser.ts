@@ -15,6 +15,7 @@ export type ActionType =
   | "DELETE_LAST_TRANSACTION"
   | "SET_PERSONALITY"
   | "WEB_DASHBOARD"
+  | "SYNC_SHEET"
   | "SYNC_NOTION"
   | "HELP"
   | "CHAT"
@@ -323,6 +324,15 @@ export function parseFinancialMessage(rawText: string): ParseResult {
       action: "RESET_TRANSACTIONS",
       data: null,
       reply_message: "Sedang mereset riwayat transaksi Anda...",
+    };
+  }
+
+  // 2c. Cek sinkronisasi Google Sheets
+  if (/^(sync\s*(sheet|spreadsheet)|sinkron(kan)?\s*(ke\s*)?(sheet|spreadsheet|data))$/i.test(lower)) {
+    return {
+      action: "SYNC_SHEET",
+      data: null,
+      reply_message: "Sedang menyinkronkan data keuangan ke Google Spreadsheet Anda...",
     };
   }
 

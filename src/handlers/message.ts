@@ -79,6 +79,167 @@ export const handleIncomingMessage = async (
       return;
     }
 
+    const cleanCmd = quickCmd.replace(/[.!?,]+$/, "").trim();
+
+    // Fast-path perintah administratif & sinkronisasi tanpa delay AI / halusinasi chat
+    if (
+      /^(reset|hapus semua|hapus semua transaksi|reset transaksi|kosongkan transaksi|reset data)$/i.test(cleanCmd) ||
+      (/\b(reset|hapus semua|kosongkan)\b/i.test(cleanCmd) && /\b(transaksi|catatan)\b/i.test(cleanCmd) && !/\b(aset|asset|harta|hutang|piutang|budget|anggaran|langganan|subscription)\b/i.test(cleanCmd))
+    ) {
+      const plan = {
+        function: "reset_transactions" as const,
+        args: { confirm: true },
+        reply: "Sedang mereset riwayat transaksi Anda...",
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("reset_transactions", actionCtx);
+      return;
+    }
+
+    if (
+      /^(batal(kan)? transaksi|hapus transaksi (terakhir|tadi)|salah catat)$/i.test(cleanCmd) ||
+      /\b(hapus transaksi (terakhir|tadi)|batal(kan)? transaksi|salah catat)\b/i.test(cleanCmd)
+    ) {
+      const plan = {
+        function: "delete_last_transaction" as const,
+        args: {},
+        reply: "Sedang membatalkan transaksi terakhir Anda...",
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("delete_last_transaction", actionCtx);
+      return;
+    }
+
+    if (
+      /\b(aset|asset|harta)\b/i.test(cleanCmd) &&
+      /\b(hapus semua|kosongkan|reset|bersihkan)\b/i.test(cleanCmd)
+    ) {
+      const plan = {
+        function: "manage_assets" as const,
+        args: { action: "CLEAR" },
+        reply: "Sedang mengosongkan dan menghapus seluruh daftar aset Anda...",
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("manage_assets", actionCtx);
+      return;
+    }
+
+    if (
+      /\b(hutang|piutang)\b/i.test(cleanCmd) &&
+      /\b(hapus semua|kosongkan|reset|bersihkan)\b/i.test(cleanCmd)
+    ) {
+      const plan = {
+        function: "manage_debt" as const,
+        args: { action: "CLEAR" },
+        reply: "Sedang mengosongkan dan menghapus seluruh daftar hutang & piutang Anda...",
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("manage_debt", actionCtx);
+      return;
+    }
+
+    if (
+      /\b(budget|anggaran)\b/i.test(cleanCmd) &&
+      /\b(hapus semua|kosongkan|reset|bersihkan)\b/i.test(cleanCmd)
+    ) {
+      const plan = {
+        function: "set_budget" as const,
+        args: { action: "CLEAR" },
+        reply: "Sedang mengosongkan seluruh batas anggaran Anda...",
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("set_budget", actionCtx);
+      return;
+    }
+
+    if (
+      /\b(langganan|subscription|subs)\b/i.test(cleanCmd) &&
+      /\b(hapus semua|kosongkan|reset|bersihkan)\b/i.test(cleanCmd)
+    ) {
+      const plan = {
+        function: "manage_subscriptions" as const,
+        args: { action: "CLEAR" },
+        reply: "Sedang mengosongkan seluruh daftar langganan Anda...",
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("manage_subscriptions", actionCtx);
+      return;
+    }
+
+    if (/^(sync\s*(sheet|spreadsheet)|sinkron(kan)?\s*(ke\s*)?(sheet|spreadsheet|data))$/i.test(cleanCmd)) {
+      const plan = {
+        function: "sync_sheet" as const,
+        args: {},
+        reply: "Sedang menyinkronkan data Google Sheets Anda...",
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("sync_sheet", actionCtx);
+      return;
+    }
+
     // 2. Onboarding & Registrasi Pengguna Baru (Minimal Nama Panggilan & Nomor WA jika Laptop)
     const lowerText = text.toLowerCase().trim();
     const isRegisterCommand =

@@ -187,8 +187,8 @@ export async function getRecentTransactions(
 export async function resetAllTransactions(userId?: string): Promise<{ success: boolean }> {
   await connectDatabase();
   if (userId) {
-    await executeSql('DELETE FROM public."Transaction" WHERE "userId" = $1', [userId]);
-    await executeSql('DELETE FROM public."Transfer" WHERE "userId" = $1', [userId]);
+    await executeSql('DELETE FROM public."Transaction" WHERE "userId" = $1 OR "userId" IS NULL', [userId]);
+    await executeSql('DELETE FROM public."Transfer" WHERE "userId" = $1 OR "userId" IS NULL', [userId]);
   } else {
     await executeSql('DELETE FROM public."Transaction"');
     await executeSql('DELETE FROM public."Transfer"');
@@ -202,7 +202,7 @@ export async function resetAllTransactions(userId?: string): Promise<{ success: 
 export async function deleteLastTransaction(userId?: string): Promise<any | null> {
   await connectDatabase();
   const selectSql = userId
-    ? `SELECT * FROM public."Transaction" WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 1`
+    ? `SELECT * FROM public."Transaction" WHERE ("userId" = $1 OR "userId" IS NULL) ORDER BY "createdAt" DESC LIMIT 1`
     : `SELECT * FROM public."Transaction" ORDER BY "createdAt" DESC LIMIT 1`;
   const res = await executeSql(selectSql, userId ? [userId] : []);
 
