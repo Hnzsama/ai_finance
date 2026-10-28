@@ -62,4 +62,14 @@ const t9 = parseFinancialMessage("bantuan");
 assert.equal(t9.action, "HELP");
 console.log("✔ Test 9 passed:", t9.reply_message);
 
-console.log("\n🎉 All 9 parser test cases passed perfectly!");
+// Test 10: Multi-Wallet Initial Balance with Minus Driver Balance
+const t10 = parseFinancialMessage("cash 32 ribu, shopeepay -52.652");
+assert.equal(t10.action, "SET_WALLET_BALANCE");
+assert.equal(t10.data?.actionPayload?.items?.length, 2);
+assert.equal(t10.data?.actionPayload?.items[0].wallet, "Cash");
+assert.equal(t10.data?.actionPayload?.items[0].amount, 32000);
+assert.equal(t10.data?.actionPayload?.items[1].wallet, "ShopeePay");
+assert.equal(t10.data?.actionPayload?.items[1].amount, -52652);
+console.log("✔ Test 10 passed:", t10.reply_message);
+
+console.log("\n🎉 All 10 parser test cases passed perfectly!");

@@ -318,12 +318,15 @@ export class AiService {
           }
         }
 
-        // Jika local parser mengenali intent SET_WALLET_BALANCE (misal: "masukan shopeepay minus 52.652")
+        // Jika local parser mengenali intent SET_WALLET_BALANCE (misal: "cash 32 ribu, shopeepay -52.652")
         // cegah AI salah mengklasifikasikan sebagai record_transaction INCOME
         if (local.action === "SET_WALLET_BALANCE") {
           parsed.function = "set_wallet_balance";
           parsed.args.wallet = local.data?.wallet || parsed.args.wallet || "ShopeePay";
           parsed.args.amount = local.data?.amount ?? parsed.args.amount;
+          if (local.data?.actionPayload?.items) {
+            parsed.args.items = local.data.actionPayload.items;
+          }
         }
 
         // Proteksi System Commands agar AI tidak pernah berhalusinasi mengembalikan tipe "chat"
@@ -553,6 +556,7 @@ export class AiService {
           args: {
             wallet: p.data?.wallet || "ShopeePay",
             amount,
+            items: p.data?.actionPayload?.items,
           },
           reply,
         };

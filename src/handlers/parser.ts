@@ -210,6 +210,81 @@ export function extractNumericAmount(text: string): {
   return chosen ? { amount: chosen.amount, raw: chosen.raw } : null;
 }
 
+export interface WalletBalanceItem {
+  wallet: string;
+  amount: number;
+}
+
+/**
+ * Deteksi atur saldo multi-dompet sekaligus (misal: "cash 32 ribu, shopeepay -52.652")
+ */
+export function parseMultiWalletBalances(rawText: string): WalletBalanceItem[] | null {
+  const lower = rawText.toLowerCase();
+
+  // Jangan tangkap jika ada kata metode bayar atau kata kerja transaksi/transfer/kebutuhan
+  if (
+    /\b(pake|pakai|via|lewat|beli|bayar|makan|minum|bensin|belanja|gaji|gajian|bonus|dapat|terima|kirim|transfer|tf|tarik|topup|top up|hutang|piutang|pinjam|pinjem|aset|asset)\b/i.test(
+      lower
+    )
+  ) {
+    return null;
+  }
+
+  // Cek apakah ada minimal satu nama dompet dalam teks
+  const hasAnyWallet = Object.keys(WALLETS).some((key) => new RegExp(`\\b${key}\\b`, "i").test(lower));
+  if (!hasAnyWallet) return null;
+
+  // Pecah per tanda pemisah (koma, titik koma, 'dan', atau newline)
+  const segments = lower.split(/[,;\n]|\bdan\b/);
+  const results: WalletBalanceItem[] = [];
+
+  for (const seg of segments) {
+    const trimmed = seg.trim();
+    if (!trimmed) continue;
+
+    // Cari nama dompet di segmen ini
+    let matchedWallet: string | null = null;
+    for (const [key, val] of Object.entries(WALLETS)) {
+      if (new RegExp(`\\b${key}\\b`, "i").test(trimmed)) {
+        matchedWallet = val;
+        break;
+      }
+    }
+
+    if (!matchedWallet) continue;
+
+    // Cek apakah ada nominal di segmen ini (termasuk deteksi minus)
+    const isNeg = /\b(minus|min)\b/i.test(trimmed) || /-\s*\d/.test(trimmed);
+    const extracted = extractNumericAmount(trimmed);
+    if (extracted && extracted.amount > 0) {
+      const finalAmt = isNeg ? -Math.abs(extracted.amount) : extracted.amount;
+      if (!results.some((r) => r.wallet === matchedWallet)) {
+        results.push({
+          wallet: matchedWallet,
+          amount: finalAmt,
+        });
+      }
+    }
+  }
+
+  // Jika hasilnya > 1 dompet (misal: "cash 32 ribu, shopeepay -52.652"), langsung valid!
+  if (results.length > 1) {
+    return results;
+  }
+
+  // Jika hasilnya cuma 1 dompet (misal: "shopeepay -52.652" atau "saldo bca 5jt"):
+  // Harus ada kata "saldo" / "saldo awal" / "atur saldo" ATAU bertanda minus
+  if (results.length === 1) {
+    const isNeg = results[0].amount < 0;
+    const isExplicitSaldo = /\b(saldo awal|atur saldo|set saldo|isi saldo|saldo sekarang|saldo)\b/i.test(lower);
+    if (isExplicitSaldo || isNeg) {
+      return results;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Parsing pesan percakapan kasual menjadi data terstruktur JSON keuangan
  */
@@ -369,39 +444,32 @@ export function parseFinancialMessage(rawText: string): ParseResult {
     }
   }
 
-  // 4b. Cek Atur Saldo Dompet / Saldo Awal (termasuk saldo MINUS driver ShopeeFood / Grab / Gojek)
-  // Contoh: "masukan shopeepay minus 52.652", "saldo awal bca 5jt", "saldo shopeepay minus 50rb", "atur saldo cash 200k", "shopeepay minus 52652"
-  const isSetBalance =
-    /\b(saldo awal|atur saldo|set saldo|isi saldo|saldo sekarang)\b/i.test(lower) ||
-    (/\b(masuk(k)?an|input|catat)\b/i.test(lower) && /\b(minus|-)\b/i.test(lower)) ||
-    (/\b(shopeepay|gopay|bca|cash|dana|ovo|seabank|mandiri|bri|jago)\b/i.test(lower) && /\b(minus|-)\b/i.test(lower) && !/\b(transfer|tf|beli|bayar)\b/i.test(lower));
-
-  if (isSetBalance && !isCodOrder) {
-    const extracted = extractNumericAmount(text);
-    if (extracted && extracted.amount > 0) {
-      let targetWallet = "ShopeePay";
-      for (const [key, val] of Object.entries(WALLETS)) {
-        if (new RegExp(`\\b${key}\\b`, "i").test(lower)) {
-          targetWallet = val;
-          break;
-        }
-      }
-
-      const isNegative = /\b(minus|min|-)\b/i.test(lower);
-      const finalAmount = isNegative ? -Math.abs(extracted.amount) : extracted.amount;
-
-      return {
-        action: "SET_WALLET_BALANCE",
-        data: {
-          type: null,
-          amount: finalAmount,
-          description: `Atur Saldo ${targetWallet}`,
-          category: "Saldo Awal & Penyesuaian",
-          wallet: targetWallet,
-        },
-        reply_message: `💳 *Saldo Dompet Diatur:*\nSaldo *${targetWallet}* berhasil disesuaikan menjadi *${formatIDR(finalAmount)}*${isNegative ? " (Saldo Minus Normal Driver ShopeeFood)" : ""}.`,
-      };
+  // 4b. Cek Atur Saldo Dompet / Saldo Awal (termasuk multi-dompet seperti "cash 32 ribu, shopeepay -52.652" dan saldo MINUS driver ShopeeFood)
+  const multiBalances = parseMultiWalletBalances(text);
+  if (multiBalances && multiBalances.length > 0 && !isCodOrder) {
+    const isSingle = multiBalances.length === 1;
+    let replyMsg = "";
+    if (isSingle) {
+      const isNegative = multiBalances[0].amount < 0;
+      replyMsg = `💳 *Saldo Dompet Diatur:*\nSaldo *${multiBalances[0].wallet}* berhasil disesuaikan menjadi *${formatIDR(multiBalances[0].amount)}*${isNegative ? " (Saldo Minus Normal Driver ShopeeFood)" : ""}.`;
+    } else {
+      replyMsg =
+        `💳 *Saldo Dompet Diatur:*\n` +
+        multiBalances.map((b) => `• *${b.wallet}:* ${formatIDR(b.amount)}${b.amount < 0 ? " (Minus Driver)" : ""}`).join("\n");
     }
+
+    return {
+      action: "SET_WALLET_BALANCE",
+      data: {
+        type: null,
+        amount: multiBalances[0].amount,
+        description: `Atur Saldo ${multiBalances.map((b) => b.wallet).join(", ")}`,
+        category: "Saldo Awal & Penyesuaian",
+        wallet: multiBalances[0].wallet,
+        actionPayload: { items: multiBalances },
+      },
+      reply_message: replyMsg,
+    };
   }
 
   // 5. Cek Transfer Antar Dompet biasa

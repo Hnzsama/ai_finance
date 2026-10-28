@@ -9,6 +9,7 @@ import {
   updateUserSpreadsheet,
 } from "../services/user.ts";
 import { dispatchAction, type ActionContext } from "./actions/index.ts";
+import { parseMultiWalletBalances } from "./parser.ts";
 
 type WAMessage = proto.IWebMessageInfo;
 
@@ -237,6 +238,32 @@ export const handleIncomingMessage = async (
         rawText: text,
       };
       await dispatchAction("sync_sheet", actionCtx);
+      return;
+    }
+
+    // Fast-path atur saldo dompet (termasuk multi-dompet seperti "cash 32 ribu, shopeepay -52.652")
+    const multiBalances = parseMultiWalletBalances(text);
+    if (multiBalances && multiBalances.length > 0) {
+      const plan = {
+        function: "set_wallet_balance" as const,
+        args: {
+          items: multiBalances,
+          wallet: multiBalances[0].wallet,
+          amount: multiBalances[0].amount,
+        },
+        reply: "Sedang menyesuaikan saldo dompet Anda...",
+      };
+      const actionCtx: ActionContext = {
+        sock,
+        msg,
+        remoteJid,
+        user,
+        deviceInfo,
+        switchNotice,
+        plan,
+        rawText: text,
+      };
+      await dispatchAction("set_wallet_balance", actionCtx);
       return;
     }
 

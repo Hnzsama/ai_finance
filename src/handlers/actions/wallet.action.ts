@@ -45,10 +45,16 @@ export async function handleListWallets(ctx: ActionContext): Promise<void> {
 export async function handleSetWalletBalance(ctx: ActionContext): Promise<void> {
   const { sock, msg, remoteJid, user, deviceInfo, switchNotice, plan } = ctx;
   try {
-    const walletName = plan.args.wallet || "Cash";
-    const amount = Number(plan.args.amount) || 0;
+    const rawItems: Array<{ wallet: string; amount: number }> =
+      plan.args.items && Array.isArray(plan.args.items) && plan.args.items.length > 0
+        ? plan.args.items
+        : [{ wallet: plan.args.wallet || "Cash", amount: Number(plan.args.amount) || 0 }];
 
-    const res = await setWalletInitialBalance(walletName, amount, user.id, deviceInfo.jid);
+    const updatedList: Array<{ wallet: string; targetBalance: string; amount: number }> = [];
+    for (const item of rawItems) {
+      const res = await setWalletInitialBalance(item.wallet, Number(item.amount), user.id, deviceInfo.jid);
+      updatedList.push({ wallet: res.wallet, targetBalance: res.targetBalance, amount: Number(item.amount) });
+    }
 
     if (user.spreadsheetId) {
       googleSheetsService
@@ -57,17 +63,19 @@ export async function handleSetWalletBalance(ctx: ActionContext): Promise<void> 
     }
 
     let reply = plan.reply ? `${plan.reply}\n\n` : "";
-    const isNegative = amount < 0;
-    const badge = isNegative ? " (Saldo Minus Driver)" : "";
-    reply +=
-      `💳 *Saldo Diatur:* ${res.wallet}\n` +
-      `💰 *Saldo Baru:* ${res.targetBalance}${badge}\n\n` +
-      `💡 _Ketik "dompet" untuk cek saldo akun lainnya._`;
+    reply += `💳 *Saldo Dompet Berhasil Diperbarui:*\n\n`;
+    for (const item of updatedList) {
+      const icon = item.amount >= 0 ? "🟢" : "🔴";
+      const note = item.amount < 0 ? " _(Saldo Minus Normal Driver ShopeeFood)_" : "";
+      reply += `${icon} *${item.wallet}:* ${item.targetBalance}${note}\n`;
+    }
+    reply += `\n📊 *Google Sheets:* Tersinkron otomatis ke Tab ${new Date().getFullYear()} & Ringkasan Dompet.\n`;
+    reply += `💡 _Ketik *dompet* untuk cek ringkasan seluruh akun._`;
 
     await sock.sendMessage(remoteJid, { text: switchNotice + reply }, { quoted: msg });
   } catch (err) {
     console.error("[Database] Gagal mengatur saldo:", err);
-    await sock.sendMessage(remoteJid, { text: "⚠️ Gagal mengatur saldo awal dompet." }, { quoted: msg });
+    await sock.sendMessage(remoteJid, { text: "⚠️ Gagal mengatur saldo dompet." }, { quoted: msg });
   }
 }
 
